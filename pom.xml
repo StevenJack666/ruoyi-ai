@@ -417,6 +417,12 @@
                 <version>${jackson-dataformat-xml.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>1.27.1</version> <!-- 升级到 1.27.1 -->
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 

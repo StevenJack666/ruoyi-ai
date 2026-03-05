@@ -1,6 +1,8 @@
 package org.ruoyi.system.utils;
 
 import com.alibaba.fastjson.JSONObject;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import okhttp3.*;
 import org.ruoyi.common.core.utils.StringUtils;
 
@@ -11,6 +13,7 @@ import java.rmi.ServerException;
 /***
  * 千问上传文件工具类
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class QwenFileUploadUtils {
 
     // 上传本地文件

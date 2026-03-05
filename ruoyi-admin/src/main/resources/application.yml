@@ -224,6 +224,7 @@ xss:
   # 排除链接
   excludeUrls:
     - /system/notice
+    - /system/config
 
 --- # 分布式锁 lock4j 全局配置
 lock4j:

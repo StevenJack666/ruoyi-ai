@@ -4,6 +4,7 @@ import org.ruoyi.workflow.entity.WorkflowComponent;
 import org.ruoyi.workflow.entity.WorkflowNode;
 import org.ruoyi.workflow.workflow.node.AbstractWfNode;
 import org.ruoyi.workflow.workflow.node.EndNode;
+import org.ruoyi.workflow.workflow.node.documentParser.DocumentExtractorNode;
 import org.ruoyi.workflow.workflow.node.humanFeedBack.HumanFeedbackNode;
 import org.ruoyi.workflow.workflow.node.answer.LLMAnswerNode;
 import org.ruoyi.workflow.workflow.node.httpRequest.HttpRequestNode;
@@ -29,6 +30,7 @@ public class WfNodeFactory {
             case HTTP_REQUEST -> wfNode = new HttpRequestNode(wfComponent, nodeDefinition, wfState, nodeState);
             case SWITCHER -> wfNode = new SwitcherNode(wfComponent, nodeDefinition, wfState, nodeState);
             case HUMAN_FEEDBACK -> wfNode = new HumanFeedbackNode(wfComponent, nodeDefinition, wfState, nodeState);
+            case DOCUMENT_EXTRACTOR -> wfNode = new DocumentExtractorNode(wfComponent, nodeDefinition, wfState, nodeState);
             default -> {
             }
         }

@@ -15,6 +15,7 @@ public enum NodeMessageTemplateEnum {
     LLM_RESPONSE("node.llmAnswer.template"),
     KEYWORD_EXTRACTOR("node.keywordExtractor.template"),
     EXCEPTION("node.exception.template"),
+    DOCUMENT_EXTRACTOR("node.documentExtractor.template"),
     END("node.end.template");
 
     private final String value;

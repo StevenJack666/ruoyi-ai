@@ -3669,4 +3669,6 @@ INSERT INTO `sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`,
 INSERT INTO `sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`, `config_value`, `config_type`, `create_dept`, `create_by`, `create_time`, `update_by`, `update_time`, `remark`) VALUES (2027213914603995137, '000000', '大模型回答节点响应模板', 'node.llmAnswer.template', '🤖 LLM 节点 生成回答：', 'Y', 103, 1, '2026-02-27 10:47:16', 1, '2026-02-27 10:52:40', NULL);
 INSERT INTO `sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`, `config_value`, `config_type`, `create_dept`, `create_by`, `create_time`, `update_by`, `update_time`, `remark`) VALUES (2027214387000066050, '000000', '关键词提取响应模板', 'node.keywordExtractor.template', '🔑 关键词提取节点 处理完成 ： ', 'Y', 103, 1, '2026-02-27 10:49:08', 1, '2026-02-27 10:52:08', NULL);
 INSERT INTO `sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`, `config_value`, `config_type`, `create_dept`, `create_by`, `create_time`, `update_by`, `update_time`, `remark`) VALUES (2027217577397391361, '000000', '工作流异常响应模板', 'node.exception.template', '🛑 工作流发生异常：', 'N', 103, 1, '2026-02-27 11:01:49', 1, '2026-02-27 11:02:01', NULL);
-
+ALTER TABLE `chat_message` ADD COLUMN `category` varchar(255) NULL COMMENT '消息分类' AFTER `role`;
+ALTER TABLE `chat_message` ADD COLUMN `ext` text NULL COMMENT '扩展字段' AFTER `tenant_id`;
+ALTER TABLE `chat_message` MODIFY COLUMN `remark` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '备注' AFTER `update_time`;

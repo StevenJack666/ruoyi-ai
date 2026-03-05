@@ -1,5 +1,6 @@
 package org.ruoyi.common.chat.domain.dto.request;
 
+import com.alibaba.fastjson.JSONObject;
 import dev.langchain4j.data.message.ChatMessage;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
@@ -86,4 +87,18 @@ public class ChatRequest {
      */
     private List<ChatMessage> chatMessages;
 
+    /**
+     * 文件信息体
+     */
+    private FileRunner fileRunner;
+
+    /**
+     * 是否上传文件
+     */
+    private Boolean isUploadFile;
+
+    /**
+     * 文件元数据
+     */
+    private String fileMetaData;
 }

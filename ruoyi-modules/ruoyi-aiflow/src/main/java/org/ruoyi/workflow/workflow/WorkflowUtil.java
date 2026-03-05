@@ -11,6 +11,7 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.langchain4j.generators.StreamingChatGenerator;
 import org.bsc.langgraph4j.state.AgentState;
+import org.ruoyi.common.chat.enums.MessageType;
 import org.ruoyi.common.chat.enums.RoleType;
 import org.ruoyi.common.chat.service.chat.IChatModelService;
 import org.ruoyi.common.chat.service.chat.IChatService;
@@ -29,7 +30,6 @@ import org.ruoyi.workflow.util.JsonUtil;
 import org.ruoyi.workflow.workflow.data.NodeIOData;
 import org.ruoyi.workflow.workflow.data.NodeIODataContent;
 import org.ruoyi.workflow.workflow.def.WfNodeParamRef;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -134,7 +134,8 @@ public class WorkflowUtil extends AbstractChatMessageService {
 
         // 构建 ruoyi-ai 的 ChatRequest
         List<ChatMessage> chatMessages = new ArrayList<>();
-        addUserMessage(node, state.getInputs(), chatMessages);
+        List<NodeIOData> inputs = state.getInputs();
+        addUserMessage(node, inputs, chatMessages);
         chatMessages.addAll(systemMessage);
 
         // 定义模型调用对象
@@ -156,7 +157,7 @@ public class WorkflowUtil extends AbstractChatMessageService {
                     // 获取模板消息拼接信息体
                     String message = nodeMessageTemplate + responseTxt;
                     // 保存助手回复消息
-                    saveChatMessage(chatRequest, userId, message, RoleType.ASSISTANT.getName(), chatModelVo);
+                    saveChatMessage(chatRequest, userId, message, RoleType.ASSISTANT.getName(), MessageType.WORKFLOW.getName(), chatModelVo);
                     log.info("{}消息结束，已保存到数据库", getProviderName());
                 }
 

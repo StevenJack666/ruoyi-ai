@@ -1,5 +1,6 @@
 package org.ruoyi.common.chat.entity.chat;
 
+import com.alibaba.fastjson.JSONObject;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;

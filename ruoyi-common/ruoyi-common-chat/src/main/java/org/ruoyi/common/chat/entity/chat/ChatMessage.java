@@ -49,6 +49,11 @@ public class ChatMessage extends TenantEntity {
     private String role;
 
     /**
+     * 消息分类
+     */
+    private String category;
+
+    /**
      * 扣除金额
      */
     private Long deductCost;
@@ -72,6 +77,12 @@ public class ChatMessage extends TenantEntity {
      * 备注
      */
     private String remark;
+
+
+    /**
+     * 拓展字段
+     */
+    private String ext;
 
 
 }

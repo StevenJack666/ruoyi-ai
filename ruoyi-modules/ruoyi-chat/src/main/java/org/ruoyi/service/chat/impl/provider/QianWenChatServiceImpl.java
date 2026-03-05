@@ -71,41 +71,7 @@ public class QianWenChatServiceImpl extends AbstractStreamingChatService {
     protected void doChat(ChatModelVo chatModelVo,ChatRequest chatRequest,List<ChatMessage> messagesWithMemory,
                           StreamingChatResponseHandler handler) {
         StreamingChatModel streamingChatModel = buildStreamingChatModel(chatModelVo,chatRequest);
-        // 判断是否存在需要使用阿里千问的文档解析功能
-        List<ChatMessage> chatMessages = hasFileIdData(messagesWithMemory);
-        streamingChatModel.chat(chatMessages, handler);
-    }
-
-    /**
-     * 检查是否包含fileId数据
-     */
-    private List<ChatMessage> hasFileIdData(List<ChatMessage> messagesWithMemory) {
-        if (CollectionUtils.isEmpty(messagesWithMemory)) {
-            return messagesWithMemory;
-        }
-
-        // 找到包含阿里上传文件前缀的用户信息
-        var foundUserMessage = messagesWithMemory.stream()
-            .filter(message -> message instanceof UserMessage)
-            .map(message -> (UserMessage) message)
-            .filter(userMessage ->
-                userMessage.singleText().toLowerCase().contains(UPLOAD_FILE_API_PREFIX.toLowerCase())
-            )
-            .findFirst();
-
-        // 找到原本SystemMessage
-        var systemMessage = messagesWithMemory.stream()
-            .filter(message -> message instanceof SystemMessage)
-            .map(message -> (SystemMessage) message)
-            .findFirst();
-
-        // 判断是否存在并重新构建信息体(符合千问文档解析格式)
-        return foundUserMessage.map(userMsg -> {
-            List<ChatMessage> messages = new ArrayList<>();
-            messages.add(new SystemMessage(userMsg.singleText()));
-            systemMessage.ifPresent(sysMsg -> messages.add(new UserMessage(sysMsg.text())));
-            return messages;
-        }).orElse(messagesWithMemory);
+        streamingChatModel.chat(messagesWithMemory, handler);
     }
 
     /**
