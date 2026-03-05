@@ -3672,3 +3672,4 @@ INSERT INTO `sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`,
 ALTER TABLE `chat_message` ADD COLUMN `category` varchar(255) NULL COMMENT '消息分类' AFTER `role`;
 ALTER TABLE `chat_message` ADD COLUMN `ext` text NULL COMMENT '扩展字段' AFTER `tenant_id`;
 ALTER TABLE `chat_message` MODIFY COLUMN `remark` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '备注' AFTER `update_time`;
+INSERT INTO `sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`, `config_value`, `config_type`, `create_dept`, `create_by`, `create_time`, `update_by`, `update_time`, `remark`) VALUES (2029123949970014210, '000000', '文件对话提示词模板', 'chat.file.analyzer.template', '<document>{fileContent}</document>请根据上述文档内容回答用户的问题。不要编造文档中未提及的信息。用户问题: {userQuestion}', 'N', 103, 1, '2026-03-04 17:17:04', 1, '2026-03-04 17:23:09', NULL);
