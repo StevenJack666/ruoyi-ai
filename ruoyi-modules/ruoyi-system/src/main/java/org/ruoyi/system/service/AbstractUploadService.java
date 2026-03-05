@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 
 @Slf4j
 public abstract class AbstractUploadService implements IUploadService {
@@ -37,7 +38,6 @@ public abstract class AbstractUploadService implements IUploadService {
                 throw new ServiceException("文件名不能为空");
             }
             int lastDotIndex = originalName != null ? originalName.lastIndexOf(".") : -1;
-            String prefix = lastDotIndex > 0 ? originalName.substring(0, lastDotIndex) : "";
             String suffix = lastDotIndex > 0 ? originalName.substring(lastDotIndex + 1) : "";
             try {
                 // 确保上传目录存在
@@ -45,8 +45,14 @@ public abstract class AbstractUploadService implements IUploadService {
                 if (!Files.exists(uploadDir)) {
                     Files.createDirectories(uploadDir);
                 }
+                // 随机UUID
+                UUID randomUUID = UUID.randomUUID();
+                // 文件前缀
+                String prefix = randomUUID.toString();
+                // 随机文件名（避免文件名冲突）
+                String uniqueFileName = randomUUID + "." + suffix;
                 // 生成上传文件名
-                Path targetPath = uploadDir.resolve(originalName);
+                Path targetPath = uploadDir.resolve(uniqueFileName);
                 // 直接保存文件
                 File pathFile = targetPath.toFile();
                 file.transferTo(pathFile);
@@ -75,7 +81,7 @@ public abstract class AbstractUploadService implements IUploadService {
         baseMapper.insert(oss);
         SysOssUploadVo uploadVo = new SysOssUploadVo();
         uploadVo.setUrl(url);
-        uploadVo.setFileName(originalName);
+        uploadVo.setFileName(prefix);
         uploadVo.setOssId(oss.getOssId().toString());
         uploadVo.setFilePath(filePath);
         return uploadVo;
