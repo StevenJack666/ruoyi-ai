@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -56,7 +57,7 @@ public class ToolProviderFactory {
      */
     public List<Object> getBuiltinToolObjectsByNames(List<String> toolNames) {
         if (CollectionUtils.isEmpty(toolNames)) {
-            return getAllBuiltinToolObjects();
+            return new ArrayList<>();
         }
         return builtinToolRegistry.getBuiltinToolObjectsByNames(toolNames);
     }
@@ -69,7 +70,7 @@ public class ToolProviderFactory {
      */
     public ToolProvider getMcpToolsProviderByNames(List<String> toolNames) {
         if (CollectionUtils.isEmpty(toolNames)) {
-            return getAllEnabledMcpToolsProvider();
+            return null;
         }
         return langChain4jMcpToolProviderService.getToolProviderByNames(toolNames);
     }
