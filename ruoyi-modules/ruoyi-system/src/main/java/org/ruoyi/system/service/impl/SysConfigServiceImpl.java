@@ -77,7 +77,7 @@ public class SysConfigServiceImpl implements ISysConfigService, ConfigService {
      * @param configKey 参数key
      * @return 参数键值
      */
-    @Cacheable(cacheNames = CacheNames.SYS_CONFIG, key = "#configKey")
+    // @Cacheable(cacheNames = CacheNames.SYS_CONFIG, key = "#configKey")
     @Override
     public String selectConfigByKey(String configKey) {
         SysConfig retConfig = baseMapper.selectOne(new LambdaQueryWrapper<SysConfig>()
@@ -128,7 +128,7 @@ public class SysConfigServiceImpl implements ISysConfigService, ConfigService {
      * @param bo 参数配置信息
      * @return 结果
      */
-    @CachePut(cacheNames = CacheNames.SYS_CONFIG, key = "#bo.configKey")
+    // @CachePut(cacheNames = CacheNames.SYS_CONFIG, key = "#bo.configKey")
     @Override
     public String insertConfig(SysConfigBo bo) {
         SysConfig config = MapstructUtils.convert(bo, SysConfig.class);
@@ -145,7 +145,7 @@ public class SysConfigServiceImpl implements ISysConfigService, ConfigService {
      * @param bo 参数配置信息
      * @return 结果
      */
-    @CachePut(cacheNames = CacheNames.SYS_CONFIG, key = "#bo.configKey")
+    // @CachePut(cacheNames = CacheNames.SYS_CONFIG, key = "#bo.configKey")
     @Override
     public String updateConfig(SysConfigBo bo) {
         int row = 0;

@@ -36,7 +36,7 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
     @Resource
     private WorkflowComponentService self;
 
-    @CacheEvict(cacheNames = {WORKFLOW_COMPONENTS, WORKFLOW_COMPONENT_START_KEY})
+    // @CacheEvict(cacheNames = {WORKFLOW_COMPONENTS, WORKFLOW_COMPONENT_START_KEY})
     public WorkflowComponent addOrUpdate(WfComponentReq req) {
         WorkflowComponent wfComponent;
         if (StringUtils.isNotBlank(req.getUuid())) {
@@ -63,7 +63,7 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
         }
     }
 
-    @CacheEvict(cacheNames = {WORKFLOW_COMPONENTS, WORKFLOW_COMPONENT_START_KEY})
+    // @CacheEvict(cacheNames = {WORKFLOW_COMPONENTS, WORKFLOW_COMPONENT_START_KEY})
     public void enable(String uuid, Boolean isEnable) {
         WorkflowComponent wfComponent = PrivilegeUtil.checkAndGetByUuid(uuid, this.query(), ErrorEnum.A_WF_COMPONENT_NOT_FOUND);
         WorkflowComponent update = new WorkflowComponent();
@@ -72,7 +72,7 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
         this.baseMapper.updateById(update);
     }
 
-    @CacheEvict(cacheNames = {WORKFLOW_COMPONENTS, WORKFLOW_COMPONENT_START_KEY})
+    // @CacheEvict(cacheNames = {WORKFLOW_COMPONENTS, WORKFLOW_COMPONENT_START_KEY})
     public void deleteByUuid(String uuid) {
         WorkflowComponent component = PrivilegeUtil.checkAndGetByUuid(uuid, this.query(), ErrorEnum.A_WF_COMPONENT_NOT_FOUND);
         Integer refNodeCount = baseMapper.countRefNodes(uuid);
@@ -98,7 +98,7 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
         return baseMapper.selectPage(new Page<>(currentPage, pageSize), wrapper);
     }
 
-    @Cacheable(cacheNames = WORKFLOW_COMPONENTS)
+    // @Cacheable(cacheNames = WORKFLOW_COMPONENTS)
     public List<WorkflowComponent> getAllEnable() {
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(WorkflowComponent::getIsEnable, true)
@@ -107,7 +107,7 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
                 .list();
     }
 
-    @Cacheable(cacheNames = WORKFLOW_COMPONENT_START_KEY)
+    // @Cacheable(cacheNames = WORKFLOW_COMPONENT_START_KEY)
     public WorkflowComponent getStartComponent() {
         List<WorkflowComponent> components = self.getAllEnable();
         return components.stream()

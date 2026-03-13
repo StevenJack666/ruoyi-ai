@@ -1,17 +1,13 @@
 package org.ruoyi.service.chat.impl;
 
-import dev.langchain4j.agentic.AgenticServices;
-import dev.langchain4j.community.model.dashscope.QwenChatModel;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
-import dev.langchain4j.service.tool.ToolProvider;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.ruoyi.agent.McpAgent;
 import org.ruoyi.common.chat.base.ThreadContext;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.chat.domain.dto.request.ReSumeRunner;
@@ -26,7 +22,7 @@ import org.ruoyi.common.core.utils.ObjectUtils;
 import org.ruoyi.common.core.utils.SpringUtils;
 import org.ruoyi.common.core.utils.StringUtils;
 import org.ruoyi.common.sse.utils.SseMessageUtils;
-import org.ruoyi.mcp.service.core.ToolProviderFactory;
+import org.ruoyi.service.chat.agent.AgentExecutorRouter;
 import org.ruoyi.service.chat.impl.memory.PersistentChatMemoryStore;
 import org.springframework.util.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
@@ -100,7 +96,7 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
                 .filter(StringUtils::isNotBlank)
                 // 工作流逻辑：从 chatMessages 筛选 UserMessage 的文本
                 .orElseGet(() -> Optional.ofNullable(chatRequest.getChatMessages()).orElse(List.of()).stream()
-                    .filter(message -> message instanceof UserMessage um)
+                    .filter(message -> message instanceof UserMessage)
                     .map(message -> ((UserMessage) message).singleText())
                     .filter(StringUtils::isNotBlank)
                     .findFirst()
@@ -131,7 +127,7 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
             // 使用长期记忆增强的消息列表
             List<ChatMessage> messagesWithMemory = buildMessagesWithMemory(chatRequest);
             if (chatRequest.getEnableThinking()) {
-                String msg = doAgent(content, chatModelVo);
+                String msg = doAgent(content, chatModelVo, chatRequest);
                 SseMessageUtils.sendMessage(userId, msg);
                 SseMessageUtils.completeConnection(userId, tokenValue);
                 // 保存助手回复消息
@@ -288,70 +284,10 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
      */
     public abstract String getProviderName();
 
-    protected String doAgent(String userMessage, ChatModelVo chatModelVo) {
+    protected String doAgent(String userMessage, ChatModelVo chatModelVo, ChatRequest chatRequest) {
         log.info("执行Agent任务，消息: {}", userMessage);
-        // 加载所有可用的 Agent，让 Supervisor 根据任务类型自动选择
-        return doAgentWithAllAgents(userMessage, chatModelVo);
-    }
-
-    /**
-     * 使用单一 Agent 处理所有任务
-     * 不使用 Supervisor 模式，而是使用 MCP Agent 来处理所有任务
-     *
-     * @param userMessage 用户消息
-     * @param chatModelVo 聊天模型配置
-     * @return Agent 响应结果
-     */
-    protected String doAgentWithAllAgents(String userMessage, ChatModelVo chatModelVo) {
-
-        try {
-            // 1. 加载 LLM 模型
-            QwenChatModel qwenChatModel = QwenChatModel.builder()
-                .apiKey(chatModelVo.getApiKey())
-                .modelName(chatModelVo.getModelName())
-                .build();
-
-            // 2. 获取统一工具提供工厂
-            ToolProviderFactory toolProviderFactory = SpringUtils.getBean(ToolProviderFactory.class);
-
-            // 3. 获取所有可用的工具
-
-            // 3.1 添加 BUILTIN 工具对象（包括 SQL 工具）
-            List<Object> builtinTools = toolProviderFactory.getAllBuiltinToolObjects();
-
-            List<Object> allTools = new ArrayList<>(builtinTools);
-
-            log.debug("Loaded {} builtin tools (including SQL tools)", builtinTools.size());
-
-            log.debug("Total tools: {}", allTools.size());
-
-            // 4. 获取 MCP 工具提供者
-            ToolProvider mcpToolProvider = toolProviderFactory.getAllEnabledMcpToolsProvider();
-
-            // 5. 创建 MCP Agent（包含所有工具）
-            var agentBuilder = AgenticServices.agentBuilder(McpAgent.class).chatModel(qwenChatModel);
-
-            // 添加所有工具
-            if (!allTools.isEmpty()) {
-                agentBuilder.tools(allTools.toArray(new Object[0]));
-            }
-
-            // 添加 MCP 工具
-            if (mcpToolProvider != null) {
-                agentBuilder.toolProvider(mcpToolProvider);
-            }
-
-            McpAgent mcpAgent = agentBuilder.build();
-
-            // 6. 调用大模型LLM
-            String result = mcpAgent.callMcpTool(userMessage);
-            log.info("Agent 执行完成，结果长度: {}", result.length());
-            return result;
-
-        } catch (Exception e) {
-            log.error("Agent 模式执行失败: {}", e.getMessage(), e);
-        }
-        return null;
+        AgentExecutorRouter router = SpringUtils.getBean(AgentExecutorRouter.class);
+        return router.execute(userMessage, chatModelVo, chatRequest);
     }
 
     /**

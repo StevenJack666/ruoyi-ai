@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.CollectionUtils;
 
 import java.util.Collection;
 import java.util.List;
@@ -147,6 +148,29 @@ public class BuiltinToolRegistry {
             }
         }
 
+        return toolInstances;
+    }
+
+    /**
+     * 根据工具名称列表获取 BUILTIN 工具对象
+     *
+     * @param toolNames 工具名称列表
+     * @return 工具对象列表
+     */
+    public List<Object> getBuiltinToolObjectsByNames(List<String> toolNames) {
+        if (CollectionUtils.isEmpty(toolNames)) {
+            return getAllBuiltinToolObjects();
+        }
+
+        List<Object> toolInstances = new java.util.ArrayList<>();
+        for (String toolName : toolNames) {
+            Object tool = getBuiltinToolObject(toolName);
+            if (tool != null) {
+                toolInstances.add(tool);
+            } else {
+                log.warn("Builtin tool not found: {}", toolName);
+            }
+        }
         return toolInstances;
     }
 

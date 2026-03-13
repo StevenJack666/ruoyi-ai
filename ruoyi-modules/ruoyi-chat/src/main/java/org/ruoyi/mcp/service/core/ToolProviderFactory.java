@@ -4,6 +4,7 @@ import dev.langchain4j.service.tool.ToolProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import java.util.List;
 
@@ -45,5 +46,31 @@ public class ToolProviderFactory {
      */
     public List<Object> getAllBuiltinToolObjects() {
         return builtinToolRegistry.getAllBuiltinToolObjects();
+    }
+
+    /**
+     * 按名称获取 BUILTIN 工具对象
+     *
+     * @param toolNames 工具名称列表
+     * @return BUILTIN 工具对象列表
+     */
+    public List<Object> getBuiltinToolObjectsByNames(List<String> toolNames) {
+        if (CollectionUtils.isEmpty(toolNames)) {
+            return getAllBuiltinToolObjects();
+        }
+        return builtinToolRegistry.getBuiltinToolObjectsByNames(toolNames);
+    }
+
+    /**
+     * 按名称获取启用的 MCP 工具 Provider
+     *
+     * @param toolNames 工具名称列表
+     * @return ToolProvider
+     */
+    public ToolProvider getMcpToolsProviderByNames(List<String> toolNames) {
+        if (CollectionUtils.isEmpty(toolNames)) {
+            return getAllEnabledMcpToolsProvider();
+        }
+        return langChain4jMcpToolProviderService.getToolProviderByNames(toolNames);
     }
 }

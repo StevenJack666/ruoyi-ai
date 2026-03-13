@@ -1,11 +1,12 @@
 package org.ruoyi.common.chat.domain.dto.request;
 
+import java.util.List;
+
+import org.ruoyi.common.chat.domain.dto.ChatMessageDTO;
+
 import dev.langchain4j.data.message.ChatMessage;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
-import org.ruoyi.common.chat.domain.dto.ChatMessageDTO;
-
-import java.util.List;
 
 /**
  *  对话请求对象
@@ -85,5 +86,11 @@ public class ChatRequest {
      * 原生对话对象
      */
     private List<ChatMessage> chatMessages;
+
+    /**
+     * Agent 市场配置ID（ai_market.id）
+     * 页面选择模板后传入，服务端按模板动态组装 Agent
+     */
+    private Long agentMarketId;
 
 }
