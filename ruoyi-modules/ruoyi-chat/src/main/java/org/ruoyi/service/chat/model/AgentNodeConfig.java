@@ -6,18 +6,13 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * 运行时子 Agent 配置
+ * 单个 Agent 节点运行时配置
  */
 @Data
 @Builder
-public class RuntimeAgentConfig {
+public class AgentNodeConfig {
 
     private String name;
-
-    /**
-     * 角色: primary(主agent) / child(子agent)
-     */
-    private String role;
 
     private String model;
 
@@ -29,4 +24,9 @@ public class RuntimeAgentConfig {
     private List<String> skills;
 
     private List<String> tools;
+
+    /**
+     * 并行模式下写入状态的 key，等价于 AgenticServices 的 outputKey
+     */
+    private String outputKey;
 }

@@ -5,6 +5,6 @@ package org.ruoyi.service.chat.model;
  */
 public enum AgentExecutionMode {
     SINGLE,
-    SUPERVISOR,
+    SEQUENTIAL,
     PARALLEL
 }

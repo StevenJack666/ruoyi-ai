@@ -16,8 +16,8 @@ import org.ruoyi.mapper.agent.AiMarketToolMapper;
 import org.ruoyi.mapper.agent.AiSkillMapper;
 import org.ruoyi.mapper.mcp.McpToolMapper;
 import org.ruoyi.service.chat.model.AgentExecutionMode;
-import org.ruoyi.service.chat.model.AgentRuntimeConfig;
-import org.ruoyi.service.chat.model.RuntimeAgentConfig;
+import org.ruoyi.service.chat.model.AgentNodeConfig;
+import org.ruoyi.service.chat.model.AgentWorkflowConfig;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -43,7 +43,7 @@ public class AgentMarketAssemblyService {
     private final McpToolMapper mcpToolMapper;
     private final ObjectMapper objectMapper;
 
-    public AgentRuntimeConfig assemble(Long marketId) {
+    public AgentWorkflowConfig assemble(Long marketId) {
         if (marketId == null) {
             return null;
         }
@@ -64,41 +64,31 @@ public class AgentMarketAssemblyService {
             ? parsedConfig.mode()
             : AgentExecutionMode.SINGLE;
 
-        List<RuntimeAgentConfig> runtimeAgents = parsedConfig != null && !CollectionUtils.isEmpty(parsedConfig.agents())
+        List<AgentNodeConfig> runtimeAgents = parsedConfig != null && !CollectionUtils.isEmpty(parsedConfig.agents())
             ? parsedConfig.agents()
             : buildDefaultRuntimeAgents(market, builtinNames, mcpNames);
 
-        String systemPrompt = parsedConfig != null && StringUtils.hasText(parsedConfig.systemPrompt())
-            ? parsedConfig.systemPrompt()
-            : buildDefaultSystemPrompt(market);
-
-        String supervisorPrompt = parsedConfig != null && StringUtils.hasText(parsedConfig.supervisorPrompt())
-            ? parsedConfig.supervisorPrompt()
-            : buildSupervisorPrompt(market);
-
-        return AgentRuntimeConfig.builder()
+        return AgentWorkflowConfig.builder()
             .marketId(market.getId())
             .marketName(market.getMarketName())
-            .systemPrompt(systemPrompt)
-            .supervisorPrompt(supervisorPrompt)
             .executionMode(mode)
             .agents(runtimeAgents)
-            .builtinToolNames(builtinNames)
-            .mcpToolNames(mcpNames)
+            .parallelOutputKey(parsedConfig != null ? parsedConfig.parallelOutputKey() : null)
+            .parallelAggregate(parsedConfig != null ? parsedConfig.parallelAggregate() : null)
+            .parallelReadKeys(parsedConfig != null ? parsedConfig.parallelReadKeys() : List.of())
             .build();
     }
 
-    private List<RuntimeAgentConfig> buildDefaultRuntimeAgents(AiMarket market,
+    private List<AgentNodeConfig> buildDefaultRuntimeAgents(AiMarket market,
                                                                List<String> builtinNames,
                                                                List<String> mcpNames) {
-        List<RuntimeAgentConfig> agents = new ArrayList<>();
+        List<AgentNodeConfig> agents = new ArrayList<>();
         List<String> toolNames = new ArrayList<>();
         toolNames.addAll(builtinNames);
         toolNames.addAll(mcpNames);
 
-        agents.add(RuntimeAgentConfig.builder()
+        agents.add(AgentNodeConfig.builder()
             .name(market.getMarketName())
-            .role("primary")
             .systemPrompt("你是" + market.getMarketName() + "场景下的智能助手，请按场景目标完成任务。")
             .tools(toolNames)
             .build());
@@ -133,24 +123,6 @@ public class AgentMarketAssemblyService {
         }
     }
 
-    private String buildDefaultSystemPrompt(AiMarket market) {
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("你是").append(market.getMarketName()).append("场景下的智能助手。\n");
-        if (StringUtils.hasText(market.getDescription())) {
-            prompt.append("场景描述：").append(market.getDescription()).append("\n");
-        }
-
-        prompt.append("\n输出要求：回答简洁、准确；需要使用工具时优先调用工具后再回答。\n");
-        return prompt.toString();
-    }
-
-    private String buildSupervisorPrompt(AiMarket market) {
-        if (StringUtils.hasText(market.getDescription())) {
-            return "你是任务调度器。市场场景：" + market.getDescription() + "。请在候选 agent 中选择最合适的一个执行。";
-        }
-        return "你是任务调度器，请在候选 agent 中选择最合适的一个执行。";
-    }
-
     private ParsedConfig parseConfigJson(String configJson, List<String> builtinNames, List<String> mcpNames) {
         if (!StringUtils.hasText(configJson)) {
             return null;
@@ -163,71 +135,20 @@ public class AgentMarketAssemblyService {
             allTools.addAll(mcpNames);
 
             AgentExecutionMode mode = parseExecutionMode(root);
-            String systemPrompt = text(root, "systemPrompt");
-            String supervisorPrompt = text(root, "supervisorPrompt");
-            List<RuntimeAgentConfig> agents = parseAgents(root.path("agents"), allTools);
-
-            JsonNode supervisor = root.path("supervisor");
-            if (supervisor.isObject()) {
-                String supervisorName = defaultIfBlank(text(supervisor, "name"), "supervisor");
-                String supervisorModel = text(supervisor, "model");
-                String supPrompt = text(supervisor, "systemPrompt");
-                if (StringUtils.hasText(supPrompt)) {
-                    supervisorPrompt = supPrompt;
-                }
-
-                List<String> supervisorTools = parseTools(supervisor.path("tools"), allTools);
-                List<String> childNames = parseStringArray(supervisor.path("agents"));
-
-                List<RuntimeAgentConfig> children = agents;
-                if (!CollectionUtils.isEmpty(childNames)) {
-                    Set<String> childNameSet = childNames.stream()
-                        .filter(StringUtils::hasText)
-                        .map(String::toLowerCase)
-                        .collect(java.util.stream.Collectors.toSet());
-                    children = agents.stream()
-                        .filter(a -> StringUtils.hasText(a.getName()) && childNameSet.contains(a.getName().toLowerCase()))
-                        .toList();
-                }
-
-                if (CollectionUtils.isEmpty(children) && !CollectionUtils.isEmpty(agents)) {
-                    children = agents;
-                }
-
-                List<RuntimeAgentConfig> merged = new ArrayList<>();
-                merged.add(RuntimeAgentConfig.builder()
-                    .name(supervisorName)
-                    .role("primary")
-                    .model(supervisorModel)
-                    .systemPrompt(defaultIfBlank(supPrompt, "你是任务调度器，请选择最合适的子agent处理任务。"))
-                    .skills(parseStringArray(supervisor.path("skills")))
-                    .tools(supervisorTools)
-                    .build());
-
-                for (RuntimeAgentConfig child : children) {
-                    merged.add(RuntimeAgentConfig.builder()
-                        .name(child.getName())
-                        .role("child")
-                        .model(child.getModel())
-                        .systemPrompt(child.getSystemPrompt())
-                        .skills(child.getSkills())
-                        .tools(child.getTools())
-                        .build());
-                }
-
-                agents = merged;
-                if (mode == null) {
-                    mode = AgentExecutionMode.SUPERVISOR;
-                }
-            }
+            List<AgentNodeConfig> agents = parseAgents(root.path("agents"), allTools);
+            JsonNode parallel = root.path("parallel");
+            String parallelOutputKey = text(parallel, "outputKey");
+            String parallelAggregate = text(parallel, "aggregate");
+            List<String> parallelReadKeys = parseStringArray(parallel.path("readKeys"));
 
             if (mode == null && agents.size() > 1) {
-                mode = AgentExecutionMode.SUPERVISOR;
+                mode = AgentExecutionMode.SEQUENTIAL;
             }
 
             agents = enrichAgentSkills(agents);
 
-            return new ParsedConfig(mode, systemPrompt, supervisorPrompt, agents);
+            return new ParsedConfig(mode, agents,
+                parallelOutputKey, parallelAggregate, parallelReadKeys);
         } catch (Exception e) {
             log.warn("Parse ai_market.config_json failed: {}", e.getMessage());
             return null;
@@ -246,14 +167,14 @@ public class AgentMarketAssemblyService {
         String normalized = modeText.trim().toUpperCase();
         return switch (normalized) {
             case "SINGLE" -> AgentExecutionMode.SINGLE;
-            case "SUPERVISOR" -> AgentExecutionMode.SUPERVISOR;
+            case "SEQUENTIAL" -> AgentExecutionMode.SEQUENTIAL;
             case "PARALLEL" -> AgentExecutionMode.PARALLEL;
             default -> null;
         };
     }
 
-    private List<RuntimeAgentConfig> parseAgents(JsonNode agentsNode, List<String> allTools) {
-        List<RuntimeAgentConfig> agents = new ArrayList<>();
+    private List<AgentNodeConfig> parseAgents(JsonNode agentsNode, List<String> allTools) {
+        List<AgentNodeConfig> agents = new ArrayList<>();
         if (!agentsNode.isArray()) {
             return agents;
         }
@@ -264,19 +185,19 @@ public class AgentMarketAssemblyService {
                 continue;
             }
 
-            String role = defaultIfBlank(text(node, "role"), "child");
             String model = text(node, "model");
             String prompt = defaultIfBlank(text(node, "systemPrompt"), "你是" + name + "，请完成用户任务。");
             List<String> skills = parseStringArray(node.path("skills"));
             List<String> tools = parseTools(node.path("tools"), allTools);
+            String outputKey = text(node, "outputKey");
 
-            agents.add(RuntimeAgentConfig.builder()
+            agents.add(AgentNodeConfig.builder()
                 .name(name)
-                .role(role)
                 .model(model)
                 .systemPrompt(prompt)
                 .skills(skills)
                 .tools(tools)
+                .outputKey(outputKey)
                 .build());
         }
 
@@ -284,9 +205,13 @@ public class AgentMarketAssemblyService {
     }
 
     private List<String> parseTools(JsonNode toolsNode, List<String> allTools) {
+        if (toolsNode == null || toolsNode.isMissingNode() || toolsNode.isNull() || !toolsNode.isArray()) {
+            return allTools;
+        }
+
         List<String> tools = parseStringArray(toolsNode);
         if (CollectionUtils.isEmpty(tools)) {
-            return allTools;
+            return new ArrayList<>();
         }
 
         Set<String> allowed = new java.util.HashSet<>(allTools);
@@ -315,7 +240,7 @@ public class AgentMarketAssemblyService {
         return StringUtils.hasText(value) ? value : fallback;
     }
 
-    private List<RuntimeAgentConfig> enrichAgentSkills(List<RuntimeAgentConfig> agents) {
+    private List<AgentNodeConfig> enrichAgentSkills(List<AgentNodeConfig> agents) {
         if (CollectionUtils.isEmpty(agents)) {
             return agents;
         }
@@ -325,8 +250,8 @@ public class AgentMarketAssemblyService {
             return agents;
         }
 
-        List<RuntimeAgentConfig> enriched = new ArrayList<>(agents.size());
-        for (RuntimeAgentConfig agent : agents) {
+        List<AgentNodeConfig> enriched = new ArrayList<>(agents.size());
+        for (AgentNodeConfig agent : agents) {
             List<String> boundSkills = agent.getSkills();
             if (CollectionUtils.isEmpty(boundSkills)) {
                 enriched.add(agent);
@@ -354,13 +279,13 @@ public class AgentMarketAssemblyService {
                 prompt.append("\n");
             }
 
-            enriched.add(RuntimeAgentConfig.builder()
+            enriched.add(AgentNodeConfig.builder()
                 .name(agent.getName())
-                .role(agent.getRole())
                 .model(agent.getModel())
                 .systemPrompt(prompt.toString())
                 .skills(agent.getSkills())
                 .tools(agent.getTools())
+                .outputKey(agent.getOutputKey())
                 .build());
         }
         return enriched;
@@ -385,8 +310,9 @@ public class AgentMarketAssemblyService {
     }
 
     private record ParsedConfig(AgentExecutionMode mode,
-                                String systemPrompt,
-                                String supervisorPrompt,
-                                List<RuntimeAgentConfig> agents) {
+                                List<AgentNodeConfig> agents,
+                                String parallelOutputKey,
+                                String parallelAggregate,
+                                List<String> parallelReadKeys) {
     }
 }

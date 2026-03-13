@@ -4,15 +4,14 @@ import static org.springframework.core.Ordered.HIGHEST_PRECEDENCE;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 import org.ruoyi.agent.DynamicMcpAgent;
-import org.ruoyi.agent.SupervisorRouterAgent;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.chat.domain.vo.chat.ChatModelVo;
 import org.ruoyi.common.core.utils.StringUtils;
@@ -20,8 +19,8 @@ import org.ruoyi.mcp.service.core.ToolProviderFactory;
 import org.ruoyi.service.chat.AgentMarketAssemblyService;
 import org.ruoyi.service.chat.agent.AgentExecutor;
 import org.ruoyi.service.chat.model.AgentExecutionMode;
-import org.ruoyi.service.chat.model.AgentRuntimeConfig;
-import org.ruoyi.service.chat.model.RuntimeAgentConfig;
+import org.ruoyi.service.chat.model.AgentNodeConfig;
+import org.ruoyi.service.chat.model.AgentWorkflowConfig;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -51,13 +50,13 @@ public class MarketConfiguredAgentExecutor implements AgentExecutor {
 
     @Override
     public String execute(String userMessage, ChatModelVo chatModelVo, ChatRequest request) {
-        AgentRuntimeConfig runtimeConfig = assemblyService.assemble(request.getAgentMarketId());
+        AgentWorkflowConfig runtimeConfig = assemblyService.assemble(request.getAgentMarketId());
         if (runtimeConfig == null) {
             log.warn("Market config not found or inactive, fallback to default executor. marketId={}", request.getAgentMarketId());
             return null;
         }
 
-        List<RuntimeAgentConfig> agents = runtimeConfig.getAgents();
+        List<AgentNodeConfig> agents = runtimeConfig.getAgents();
         if (CollectionUtils.isEmpty(agents)) {
             log.warn("No runtime agents assembled for market {}, fallback executor will be used", request.getAgentMarketId());
             return null;
@@ -66,160 +65,140 @@ public class MarketConfiguredAgentExecutor implements AgentExecutor {
         AgentExecutionMode mode = runtimeConfig.getExecutionMode() == null
             ? AgentExecutionMode.SINGLE
             : runtimeConfig.getExecutionMode();
-
-        RuntimeAgentConfig primary = findPrimaryAgent(agents);
-        List<RuntimeAgentConfig> children = findChildAgents(agents, primary);
-
         return switch (mode) {
-            case SINGLE -> executeSingle(userMessage, chatModelVo, primary != null ? primary : agents.get(0));
-            case SUPERVISOR -> executeSupervisor(userMessage, chatModelVo, runtimeConfig, primary, children, agents);
-            case PARALLEL -> executeParallel(userMessage, chatModelVo,
-                CollectionUtils.isEmpty(children) ? agents : children);
+            case SINGLE -> executeOneAgent(userMessage, chatModelVo, agents.get(0));
+            case SEQUENTIAL -> executeSequential(userMessage, chatModelVo, agents);
+            case PARALLEL -> executeParallel(userMessage, chatModelVo, runtimeConfig, agents);
         };
     }
 
-    private String executeSingle(String userMessage, ChatModelVo chatModelVo, RuntimeAgentConfig agentConfig) {
-        return executeOneAgent(userMessage, chatModelVo, agentConfig);
-    }
-
-    private String executeSupervisor(String userMessage, ChatModelVo chatModelVo,
-                                     AgentRuntimeConfig runtimeConfig,
-                                     RuntimeAgentConfig primary,
-                                     List<RuntimeAgentConfig> children,
-                                     List<RuntimeAgentConfig> fallbackAgents) {
-        List<RuntimeAgentConfig> candidates = CollectionUtils.isEmpty(children) ? fallbackAgents : children;
-        RuntimeAgentConfig selected = chooseBySupervisor(userMessage, chatModelVo, runtimeConfig, primary, candidates);
-        if (selected == null) {
-            selected = candidates.get(0);
+    private String executeSequential(String userMessage, ChatModelVo chatModelVo,
+                                     List<AgentNodeConfig> agents) {
+        if (CollectionUtils.isEmpty(agents)) {
+            return null;
         }
-        return executeOneAgent(userMessage, chatModelVo, selected);
+
+        String currentInput = userMessage;
+        String finalOutput = null;
+
+        for (AgentNodeConfig agent : agents) {
+            String output = executeOneAgent(currentInput, chatModelVo, agent);
+            finalOutput = output;
+
+            if (StringUtils.isNotBlank(output)) {
+                currentInput = "用户原始问题：\n" + userMessage + "\n\n上一个agent输出：\n" + output;
+            }
+        }
+
+        return finalOutput;
     }
 
     private String executeParallel(String userMessage, ChatModelVo chatModelVo,
-                                   List<RuntimeAgentConfig> agents) {
-        List<CompletableFuture<String>> futures = agents.stream()
-            .map(agent -> CompletableFuture.supplyAsync(() -> executeOneAgent(userMessage, chatModelVo, agent)))
-            .toList();
+                                   AgentWorkflowConfig runtimeConfig,
+                                   List<AgentNodeConfig> agents) {
+        if (CollectionUtils.isEmpty(agents)) {
+            return null;
+        }
+        int poolSize = Math.max(1, Math.min(agents.size(), 8));
+        ExecutorService executor = Executors.newFixedThreadPool(poolSize);
+        try {
+            List<CompletableFuture<String>> futures = agents.stream()
+                    .map(agent -> CompletableFuture.supplyAsync(
+                            () -> executeOneAgent(userMessage, chatModelVo, agent), executor))
+                .toList();
 
-        List<String> outputs = futures.stream().map(CompletableFuture::join).toList();
+            List<String> outputs = futures.stream().map(CompletableFuture::join).toList();
+            LinkedHashMap<String, String> state = new LinkedHashMap<>();
+            for (int i = 0; i < agents.size(); i++) {
+                AgentNodeConfig agent = agents.get(i);
+                String key = StringUtils.isNotBlank(agent.getOutputKey())
+                    ? agent.getOutputKey()
+                    : (StringUtils.isNotBlank(agent.getName()) ? agent.getName() : ("agent_" + (i + 1)));
+                state.put(key, outputs.get(i));
+            }
+            return aggregateParallelState(state, userMessage, runtimeConfig);
+        } finally {
+            executor.shutdown();
+        }
+    }
+
+    private String aggregateParallelState(LinkedHashMap<String, String> state, String userMessage,
+                                          AgentWorkflowConfig runtimeConfig) {
+        String aggregateType = runtimeConfig == null ? null : runtimeConfig.getParallelAggregate();
+        List<String> readKeys = runtimeConfig == null ? List.of() : runtimeConfig.getParallelReadKeys();
+        String outputKey = runtimeConfig == null ? null : runtimeConfig.getParallelOutputKey();
+
+        if ("zip".equalsIgnoreCase(aggregateType) && readKeys != null && readKeys.size() >= 2) {
+            String zipped = zipParallelState(state, readKeys, outputKey);
+            if (StringUtils.isNotBlank(zipped)) {
+                return zipped;
+            }
+        }
 
         StringBuilder merged = new StringBuilder();
         merged.append("并行执行结果汇总：\n");
-        for (int i = 0; i < agents.size(); i++) {
-            String name = agents.get(i).getName();
-            String output = outputs.get(i);
-            merged.append("\n[").append(name).append("]\n")
-                .append(StringUtils.isNotBlank(output) ? output : "(无输出)")
+        merged.append("用户问题：\n").append(userMessage).append("\n");
+
+        state.forEach((key, value) -> {
+            merged.append("\n[").append(key).append("]\n")
+                .append(StringUtils.isNotBlank(value) ? value : "(无输出)")
                 .append("\n");
-        }
-
-        RuntimeAgentConfig summarizer = RuntimeAgentConfig.builder()
-            .name("parallel-summarizer")
-            .model(null)
-            .tools(Collections.emptyList())
-            .systemPrompt("你是并行结果汇总助手，请整合多个agent结果，去重冲突并给出清晰最终答案。")
-            .build();
-
-        String summaryInput = "用户问题：\n" + userMessage + "\n\n" + merged;
-        String summary = executeOneAgent(summaryInput, chatModelVo, summarizer);
-        return StringUtils.isNotBlank(summary) ? summary : merged.toString();
+        });
+        return merged.toString();
     }
 
-    private RuntimeAgentConfig chooseBySupervisor(String userMessage, ChatModelVo chatModelVo,
-                                                  AgentRuntimeConfig runtimeConfig,
-                                                  RuntimeAgentConfig primary,
-                                                  List<RuntimeAgentConfig> agents) {
-        Map<String, RuntimeAgentConfig> agentMap = agents.stream()
-            .filter(a -> StringUtils.isNotBlank(a.getName()))
-            .collect(Collectors.toMap(a -> a.getName().toLowerCase(Locale.ROOT), Function.identity(), (a, b) -> a));
-
-        if (agentMap.isEmpty()) {
-            return agents.get(0);
-        }
-
-        List<String> candidates = new ArrayList<>(agentMap.keySet());
-        String picked = routeWithSupervisor(userMessage, chatModelVo,
-            runtimeConfig.getSupervisorPrompt(), primary, candidates);
-        if (StringUtils.isBlank(picked)) {
-            return agents.get(0);
-        }
-
-        RuntimeAgentConfig exact = agentMap.get(picked.toLowerCase(Locale.ROOT));
-        if (exact != null) {
-            return exact;
-        }
-
-        String pickedLower = picked.toLowerCase(Locale.ROOT);
-        for (RuntimeAgentConfig candidate : agents) {
-            if (StringUtils.isNotBlank(candidate.getName())
-                && pickedLower.contains(candidate.getName().toLowerCase(Locale.ROOT))) {
-                return candidate;
+    private String zipParallelState(LinkedHashMap<String, String> state, List<String> readKeys, String outputKey) {
+        List<List<String>> columns = new ArrayList<>();
+        for (String key : readKeys) {
+            if (StringUtils.isBlank(key)) {
+                columns.add(List.of());
+                continue;
             }
+            String raw = state.getOrDefault(key, "");
+            columns.add(parseOutputItems(raw));
         }
-        return agents.get(0);
+
+        int min = columns.stream().mapToInt(List::size).min().orElse(0);
+        if (min <= 0) {
+            return "[]";
+        }
+
+        StringBuilder json = new StringBuilder();
+        json.append("{\"").append(StringUtils.isNotBlank(outputKey) ? outputKey : "plans").append("\":[");
+        for (int i = 0; i < min; i++) {
+            if (i > 0) {
+                json.append(",");
+            }
+            json.append("{");
+            for (int c = 0; c < readKeys.size(); c++) {
+                if (c > 0) {
+                    json.append(",");
+                }
+                String key = readKeys.get(c);
+                String value = columns.get(c).get(i).replace("\\", "\\\\").replace("\"", "\\\"");
+                json.append("\"").append(key).append("\":\"").append(value).append("\"");
+            }
+            json.append("}");
+        }
+        json.append("]}");
+        return json.toString();
     }
 
-    private String routeWithSupervisor(String userMessage, ChatModelVo chatModelVo,
-                                       String supervisorPrompt,
-                                       RuntimeAgentConfig primary,
-                                       List<String> candidates) {
-        try {
-            String primaryModel = primary != null ? primary.getModel() : null;
-            QwenChatModel model = QwenChatModel.builder()
-                .apiKey(chatModelVo.getApiKey())
-                .modelName(StringUtils.isNotBlank(primaryModel)
-                    ? primaryModel
-                    : chatModelVo.getModelName())
-                .build();
-            SupervisorRouterAgent router = AgenticServices.agentBuilder(SupervisorRouterAgent.class)
-                .chatModel(model)
-                .build();
-
-            String primaryPrompt = primary != null ? primary.getSystemPrompt() : null;
-            String prompt = StringUtils.isNotBlank(supervisorPrompt)
-                ? supervisorPrompt
-                : (StringUtils.isNotBlank(primaryPrompt)
-                ? primaryPrompt
-                : "你是任务调度器，请在候选 agent 中选择最合适的一个执行");
-            return router.route(prompt, userMessage, String.join(",", candidates));
-        } catch (Exception e) {
-            log.warn("Supervisor route failed: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    private RuntimeAgentConfig findPrimaryAgent(List<RuntimeAgentConfig> agents) {
-        if (CollectionUtils.isEmpty(agents)) {
-            return null;
-        }
-        return agents.stream()
-            .filter(a -> StringUtils.isNotBlank(a.getRole()) && "primary".equalsIgnoreCase(a.getRole()))
-            .findFirst()
-            .orElse(null);
-    }
-
-    private List<RuntimeAgentConfig> findChildAgents(List<RuntimeAgentConfig> agents, RuntimeAgentConfig primary) {
-        if (CollectionUtils.isEmpty(agents)) {
+    private List<String> parseOutputItems(String raw) {
+        if (StringUtils.isBlank(raw)) {
             return List.of();
         }
-
-        List<RuntimeAgentConfig> children = agents.stream()
-            .filter(a -> StringUtils.isNotBlank(a.getRole()) && "child".equalsIgnoreCase(a.getRole()))
-            .toList();
-        if (!CollectionUtils.isEmpty(children)) {
-            return children;
-        }
-
-        if (primary == null) {
-            return agents;
-        }
-
-        return agents.stream()
-            .filter(a -> a != primary)
-            .toList();
+        String content = raw.trim();
+        String[] lines = content.split("\\r?\\n");
+        return java.util.Arrays.stream(lines)
+            .map(String::trim)
+            .filter(StringUtils::isNotBlank)
+            .map(line -> line.replaceFirst("^[\\-*•\\d\\.)\\s]+", "").trim())
+            .filter(StringUtils::isNotBlank)
+            .collect(Collectors.toList());
     }
 
-    private String executeOneAgent(String userMessage, ChatModelVo chatModelVo, RuntimeAgentConfig agentConfig) {
+    private String executeOneAgent(String userMessage, ChatModelVo chatModelVo, AgentNodeConfig agentConfig) {
         if (agentConfig == null) {
             return null;
         }
@@ -244,9 +223,7 @@ public class MarketConfiguredAgentExecutor implements AgentExecutor {
             }
 
             DynamicMcpAgent agent = agentBuilder.build();
-            String prompt = StringUtils.isNotBlank(agentConfig.getSystemPrompt())
-                ? agentConfig.getSystemPrompt()
-                : "你是智能助手，请完成用户任务。";
+            String prompt =    agentConfig.getSystemPrompt();
             return agent.callMcpTool(prompt, userMessage);
         } catch (Exception e) {
             log.error("Market configured sub-agent execution failed: {}", e.getMessage(), e);
