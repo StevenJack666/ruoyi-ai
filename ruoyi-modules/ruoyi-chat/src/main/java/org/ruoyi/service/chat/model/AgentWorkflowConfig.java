@@ -34,4 +34,9 @@ public class AgentWorkflowConfig {
      * 并行模式聚合读取的状态 key 列表
      */
     private List<String> parallelReadKeys;
+
+    /**
+     * 条件分支
+     */
+    private ConditionalConfig conditional;
 }

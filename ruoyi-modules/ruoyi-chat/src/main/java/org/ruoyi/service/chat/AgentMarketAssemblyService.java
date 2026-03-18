@@ -7,6 +7,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import org.jetbrains.annotations.Nullable;
 import org.ruoyi.domain.entity.agent.AiMarket;
 import org.ruoyi.domain.entity.agent.AiMarketTool;
 import org.ruoyi.domain.entity.agent.AiSkill;
@@ -18,6 +20,7 @@ import org.ruoyi.mapper.mcp.McpToolMapper;
 import org.ruoyi.service.chat.model.AgentExecutionMode;
 import org.ruoyi.service.chat.model.AgentNodeConfig;
 import org.ruoyi.service.chat.model.AgentWorkflowConfig;
+import org.ruoyi.service.chat.model.ConditionalConfig;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -76,6 +79,7 @@ public class AgentMarketAssemblyService {
             .parallelOutputKey(parsedConfig != null ? parsedConfig.parallelOutputKey() : null)
             .parallelAggregate(parsedConfig != null ? parsedConfig.parallelAggregate() : null)
             .parallelReadKeys(parsedConfig != null ? parsedConfig.parallelReadKeys() : List.of())
+            .conditional(parsedConfig != null ? parsedConfig.conditionalConfig() : null)
             .build();
     }
 
@@ -140,19 +144,30 @@ public class AgentMarketAssemblyService {
             String parallelOutputKey = text(parallel, "outputKey");
             String parallelAggregate = text(parallel, "aggregate");
             List<String> parallelReadKeys = parseStringArray(parallel.path("readKeys"));
+            ConditionalConfig conditionalConfig = getConditionalConfig(root);
 
-            if (mode == null && agents.size() > 1) {
-                mode = AgentExecutionMode.SEQUENTIAL;
+            if (mode == null) {
+                log.warn("executionMode is required but not found in config");
+                return null;
             }
 
             agents = enrichAgentSkills(agents);
 
             return new ParsedConfig(mode, agents,
-                parallelOutputKey, parallelAggregate, parallelReadKeys);
+                parallelOutputKey, parallelAggregate, parallelReadKeys,  conditionalConfig);
         } catch (Exception e) {
             log.warn("Parse ai_market.config_json failed: {}", e.getMessage());
             return null;
         }
+    }
+
+    private @Nullable ConditionalConfig getConditionalConfig(JsonNode root) throws JsonProcessingException {
+        ConditionalConfig conditionalConfig = null;
+        JsonNode conditionalNode = root.path("conditional");
+        if (conditionalNode != null && !conditionalNode.isMissingNode()) {
+            conditionalConfig = objectMapper.treeToValue(conditionalNode, ConditionalConfig.class);
+        }
+        return conditionalConfig;
     }
 
     private AgentExecutionMode parseExecutionMode(JsonNode root) {
@@ -164,13 +179,12 @@ public class AgentMarketAssemblyService {
             return null;
         }
 
-        String normalized = modeText.trim().toUpperCase();
-        return switch (normalized) {
-            case "SINGLE" -> AgentExecutionMode.SINGLE;
-            case "SEQUENTIAL" -> AgentExecutionMode.SEQUENTIAL;
-            case "PARALLEL" -> AgentExecutionMode.PARALLEL;
-            default -> null;
-        };
+        try {
+            // 利用枚举的 valueOf 方法直接转换（会自动处理大小写）
+            return AgentExecutionMode.valueOf(modeText.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private List<AgentNodeConfig> parseAgents(JsonNode agentsNode, List<String> allTools) {
@@ -313,6 +327,7 @@ public class AgentMarketAssemblyService {
                                 List<AgentNodeConfig> agents,
                                 String parallelOutputKey,
                                 String parallelAggregate,
-                                List<String> parallelReadKeys) {
+                                List<String> parallelReadKeys,
+                                ConditionalConfig conditionalConfig) {
     }
 }

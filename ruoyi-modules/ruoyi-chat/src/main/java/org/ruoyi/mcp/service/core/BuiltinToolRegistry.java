@@ -7,9 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.CollectionUtils;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -58,7 +56,17 @@ public class BuiltinToolRegistry {
     /**
      * 内置工具显示名称映射表 (工具名称 -> 显示名称)
      */
-    private final Map<String, String> displayNames = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, String>> displayNames = new ConcurrentHashMap<>();
+
+    /**
+     * 工具名称
+     */
+    private static final String DEFAULT_DISPLAY_NAME = "displayName";
+
+    /**
+     * 工具描述
+     */
+    private static final String DEFAULT_DESCRIPTION = "description";
 
     /**
      * 初始化方法，在 Bean 创建后自动调用
@@ -79,7 +87,10 @@ public class BuiltinToolRegistry {
             // 使用 ClassUtils.getUserClass 获取原始类，避免 Spring CGLIB 代理类
             Class<?> targetClass = ClassUtils.getUserClass(provider);
             registeredToolClasses.put(toolName, targetClass);
-            displayNames.put(toolName, provider.getDisplayName());
+            displayNames.put(toolName, Map.of(
+                DEFAULT_DISPLAY_NAME, provider.getDisplayName(),
+                DEFAULT_DESCRIPTION, provider.getDescription()
+            ));
             log.info("注册内置工具: {} ({}) - 原始类: {}", toolName, provider.getDisplayName(), targetClass.getName());
         }
 
@@ -119,11 +130,14 @@ public class BuiltinToolRegistry {
      */
     public Collection<BuiltinToolDefinition> getAllBuiltinTools() {
         return displayNames.entrySet().stream()
-            .map(entry -> new BuiltinToolDefinition(
-                entry.getKey(),
-                entry.getValue(),
-                "" // Description can be added later if needed
-            ))
+            .map(entry -> {
+                Map<String, String> mcpInfoMap = entry.getValue();
+                return new BuiltinToolDefinition(
+                    entry.getKey(),
+                    mcpInfoMap.getOrDefault(DEFAULT_DISPLAY_NAME,""),
+                    mcpInfoMap.getOrDefault(DEFAULT_DESCRIPTION,"")
+                );
+            })
             .toList();
     }
 

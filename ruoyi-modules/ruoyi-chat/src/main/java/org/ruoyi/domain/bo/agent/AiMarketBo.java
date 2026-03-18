@@ -11,6 +11,8 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+
 /**
  * Agent 市场业务对象
  */
@@ -32,4 +34,8 @@ public class AiMarketBo extends BaseEntity {
     private String configJson;
 
     private String remark;
+
+    private List<String> toolIds;
+
+    private List<String> skillIds;
 }

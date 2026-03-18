@@ -2,10 +2,7 @@ package org.ruoyi.service.chat.agent.impl;
 
 import static org.springframework.core.Ordered.HIGHEST_PRECEDENCE;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -21,6 +18,7 @@ import org.ruoyi.service.chat.agent.AgentExecutor;
 import org.ruoyi.service.chat.model.AgentExecutionMode;
 import org.ruoyi.service.chat.model.AgentNodeConfig;
 import org.ruoyi.service.chat.model.AgentWorkflowConfig;
+import org.ruoyi.service.chat.model.ConditionalConfig;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -65,10 +63,12 @@ public class MarketConfiguredAgentExecutor implements AgentExecutor {
         AgentExecutionMode mode = runtimeConfig.getExecutionMode() == null
             ? AgentExecutionMode.SINGLE
             : runtimeConfig.getExecutionMode();
+
         return switch (mode) {
             case SINGLE -> executeOneAgent(userMessage, chatModelVo, agents.get(0));
             case SEQUENTIAL -> executeSequential(userMessage, chatModelVo, agents);
             case PARALLEL -> executeParallel(userMessage, chatModelVo, runtimeConfig, agents);
+            case CONDITIONAL -> executeConditional(userMessage, chatModelVo, runtimeConfig, agents);
         };
     }
 
@@ -103,8 +103,8 @@ public class MarketConfiguredAgentExecutor implements AgentExecutor {
         ExecutorService executor = Executors.newFixedThreadPool(poolSize);
         try {
             List<CompletableFuture<String>> futures = agents.stream()
-                    .map(agent -> CompletableFuture.supplyAsync(
-                            () -> executeOneAgent(userMessage, chatModelVo, agent), executor))
+                .map(agent -> CompletableFuture.supplyAsync(
+                    () -> executeOneAgent(userMessage, chatModelVo, agent), executor))
                 .toList();
 
             List<String> outputs = futures.stream().map(CompletableFuture::join).toList();
@@ -190,7 +190,7 @@ public class MarketConfiguredAgentExecutor implements AgentExecutor {
         }
         String content = raw.trim();
         String[] lines = content.split("\\r?\\n");
-        return java.util.Arrays.stream(lines)
+        return Arrays.stream(lines)
             .map(String::trim)
             .filter(StringUtils::isNotBlank)
             .map(line -> line.replaceFirst("^[\\-*•\\d\\.)\\s]+", "").trim())
@@ -223,11 +223,134 @@ public class MarketConfiguredAgentExecutor implements AgentExecutor {
             }
 
             DynamicMcpAgent agent = agentBuilder.build();
-            String prompt =    agentConfig.getSystemPrompt();
+            String prompt = agentConfig.getSystemPrompt();
             return agent.callMcpTool(prompt, userMessage);
         } catch (Exception e) {
             log.error("Market configured sub-agent execution failed: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    /**
+     * 执行条件工作流
+     * 根据 Planner 的决策动态选择执行路径
+     */
+    private String executeConditional(String userMessage, ChatModelVo chatModelVo, AgentWorkflowConfig config,
+                                      List<AgentNodeConfig> agents) {
+        ConditionalConfig conditionalConfig = config.getConditional();
+        if (conditionalConfig == null || conditionalConfig.getBranches() == null || conditionalConfig.getBranches().isEmpty()) {
+            log.warn("条件工作流配置缺失或分支定义为空");
+            return "工作流配置错误：缺少条件分支配置。";
+        }
+
+        try {
+            // Step 1: 执行 Planner 获取决策
+            String plannerName = conditionalConfig.getPlanner();
+            AgentNodeConfig plannerAgent = findAgentByName(agents, plannerName);
+
+            if (plannerAgent == null) {
+                log.error("未找到规划器Agent：{}，请检查配置", plannerName);
+                return "系统配置错误，未能找到规划组件。";
+            }
+
+            log.info("正在执行规划器Agent：{}", plannerName);
+            String rawDecision = executeOneAgent(userMessage, chatModelVo, plannerAgent);
+
+            if (rawDecision == null) {
+                log.warn("规划器Agent返回了空决策");
+                return "规划器未能生成有效方案，请重试。";
+            }
+
+            // Step 2: 清洗并解析决策结果(增强清洗：去除引号、括号、换行符及常见中文标点)
+            String decision = rawDecision.trim()
+                .replaceAll("[\"`'\\[\\]()\\n\\r\\s，。；：]", "")
+                .toUpperCase();
+
+            log.info("收到原始决策内容: [{}], 清洗后决策关键字: [{}]", rawDecision, decision);
+
+            // Step 3: 根据决策选择分支
+            List<String> branchAgentNames = selectBranch(conditionalConfig.getBranches(), decision);
+
+            if (branchAgentNames == null || branchAgentNames.isEmpty()) {
+                log.warn("未能匹配到任何有效分支，决策内容: {}", decision);
+                return "未能理解您的需求意图，请明确您的选择。";
+            }
+
+            // Step 4: 解析分支中的 Agent 配置
+            List<AgentNodeConfig> branchAgents = resolveAgents(agents, branchAgentNames);
+            if (branchAgents.isEmpty()) {
+                log.error("分支中未找到有效的Agent配置，分支Agent名称列表: {}", branchAgentNames);
+                return "系统错误：未能加载分支执行组件。";
+            }
+
+            log.info("已匹配分支 [{}]，即将执行 Agents: {}", decision, branchAgentNames);
+
+            // Step 5: 执行选中的分支
+            String branchOutput = executeSequential(userMessage, chatModelVo, branchAgents);
+
+            // Step 6: 执行后处理器
+            if (StringUtils.isNotBlank(conditionalConfig.getPostProcessor()) && branchOutput != null) {
+                AgentNodeConfig postProcessor = findAgentByName(agents, conditionalConfig.getPostProcessor());
+                if (postProcessor != null) {
+                    // 构造输入：包含原始问题和分支执行结果
+                    String finalInput = "【原始用户问题】\n" + userMessage +
+                        "\n\n【分支执行结果】\n" + branchOutput;
+
+                    log.info("执行后处理器: {}", conditionalConfig.getPostProcessor());
+                    return executeOneAgent(finalInput, chatModelVo, postProcessor);
+                }
+            }
+
+            return branchOutput;
+        } catch (Exception e) {
+            log.error("条件工作流执行异常", e);
+            return "执行过程中发生未知错误：" + e.getMessage();
+        }
+    }
+
+    /**
+     * 从配置的分支映射中根据决策选择对应的 Agent 列表
+     * 支持精确匹配和模糊包含匹配，并处理默认分支
+     */
+    private List<String> selectBranch(Map<String, List<String>> branches, String decision) {
+        // 1. 精确匹配
+        if (branches.containsKey(decision)) {
+            return branches.get(decision);
+        }
+
+        // 2. 模糊匹配 (容错)
+        for (Map.Entry<String, List<String>> entry : branches.entrySet()) {
+            // 跳过 DEFAULT 分支，它只在最后兜底
+            if (!"DEFAULT".equalsIgnoreCase(entry.getKey()) && decision.contains(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+
+        // 3. 兜底匹配 (DEFAULT)
+        return branches.get("DEFAULT");
+    }
+
+    /**
+     * 根据名称列表从配置池中解析出有效的 Agent 配置
+     */
+    private List<AgentNodeConfig> resolveAgents(List<AgentNodeConfig> allAgents, List<String> agentNames) {
+        return agentNames.stream()
+            .map(name -> findAgentByName(allAgents, name))
+            .filter(java.util.Objects::nonNull)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * 根据名称查找 Agent
+     *
+     * @param agents 智能体集合
+     * @param name   智能体名称
+     * @return 智能体配置
+     */
+    private AgentNodeConfig findAgentByName(List<AgentNodeConfig> agents, String name) {
+        return agents.stream()
+            .filter(agent -> name.equals(agent.getName()))
+            .findFirst()
+            .orElse(null);
     }
 }
