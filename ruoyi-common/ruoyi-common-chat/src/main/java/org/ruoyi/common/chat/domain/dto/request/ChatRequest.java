@@ -84,11 +84,11 @@ public class ChatRequest {
      * 会话令牌（为避免在非Web线程中获取Request，入口处注入）
      */
     private String token;
-
-    /**
-     * 原生对话对象
-     */
-    private List<ChatMessage> chatMessages;
+//
+//    /**
+//     * 原生对话对象
+//     */
+//    private List<ChatMessage> chatMessages;
 
     /**
      * Agent 市场配置ID（ai_market.id）
