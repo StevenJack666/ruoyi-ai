@@ -5,8 +5,6 @@ import cn.idev.excel.annotation.ExcelProperty;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 import org.ruoyi.common.chat.entity.chat.ChatMessage;
-import org.ruoyi.common.excel.annotation.ExcelDictFormat;
-import org.ruoyi.common.excel.convert.ExcelDictConvert;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -57,12 +55,6 @@ public class ChatMessageVo implements Serializable {
     private String role;
 
     /**
-     * 扣除金额
-     */
-    @ExcelProperty(value = "扣除金额")
-    private Long deductCost;
-
-    /**
      * 累计 Tokens
      */
     @ExcelProperty(value = "累计 Tokens")
@@ -74,12 +66,6 @@ public class ChatMessageVo implements Serializable {
     @ExcelProperty(value = "模型名称")
     private String modelName;
 
-    /**
-     * 计费类型（1-token计费，2-次数计费）
-     */
-    @ExcelProperty(value = "计费类型", converter = ExcelDictConvert.class)
-    @ExcelDictFormat(readConverterExp = "1=-token计费，2-次数计费")
-    private String billingType;
 
     /**
      * 备注

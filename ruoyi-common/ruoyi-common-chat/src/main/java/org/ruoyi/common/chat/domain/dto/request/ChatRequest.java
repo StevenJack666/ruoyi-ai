@@ -1,12 +1,11 @@
 package org.ruoyi.common.chat.domain.dto.request;
 
-import java.util.List;
-
-import org.ruoyi.common.chat.domain.dto.ChatMessageDTO;
-
-import dev.langchain4j.data.message.ChatMessage;
+import com.alibaba.fastjson.annotation.JSONField;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
+
 
 /**
  *  对话请求对象
@@ -17,10 +16,14 @@ import lombok.Data;
 @Data
 public class ChatRequest {
 
-    @NotEmpty(message = "对话消息不能为空")
-    private List<ChatMessageDTO> messages;
     @NotEmpty(message = "传入的模型不能为空")
     private String model;
+
+    /**
+     * 对话消息
+     */
+    @NotEmpty(message = "对话消息不能为空")
+    private String content;
 
     /**
      * 工作流请求体
@@ -33,19 +36,21 @@ public class ChatRequest {
     private ReSumeRunner reSumeRunner;
 
     /**
+     * 是否为人机交互用户继续输入
+     */
+    private Boolean isResume = false;
+
+    /**
      * 是否启用工作流
      */
-    private Boolean enableWorkFlow;
+    private Boolean enableWorkFlow = false;
 
     /**
      * 会话id
      */
+    @JsonSerialize(using = ToStringSerializer.class)
+    @JSONField(serializeUsing = String.class)
     private Long sessionId;
-
-    /**
-     * 应用ID
-     */
-    private String appId;
 
     /**
      * 知识库id
@@ -53,24 +58,22 @@ public class ChatRequest {
     private String knowledgeId;
 
     /**
-     * 对话id(每个聊天窗口都不一样)
+     * 应用ID
      */
-    private Long uuid;
+    private String appId;
+
 
     /**
-     * 是否为人机交互用户继续输入
+     * 对话id(每个聊天窗口都不一样)
      */
-    private Boolean isResume;
+    @JsonSerialize(using = ToStringSerializer.class)
+    @JSONField(serializeUsing = String.class)
+    private Long uuid;
 
     /**
      * 是否启用深度思考
      */
-    private Boolean enableThinking;
-
-    /**
-     * 是否自动切换模型
-     */
-    private Boolean autoSelectModel;
+    private Boolean enableThinking = false;
 
     /**
      * 是否支持联网
