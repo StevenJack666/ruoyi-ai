@@ -123,12 +123,18 @@ security:
     - /error
     - /*/api-docs
     - /*/api-docs/**
+    - /v3/api-docs
+    - /v3/api-docs/**
+    - /swagger-ui.html
+    - /swagger-ui/**
+    - /doc.html
+    - /webjars/**
     - /warm-flow-ui/config
     - /workflow/run
 # 多租户配置
 tenant:
   # 是否开启
-  enable: true
+  enable: false
   # 排除表
   excludes:
     - sys_menu
@@ -191,6 +197,9 @@ springdoc:
   api-docs:
     # 是否开启接口文档
     enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
   info:
     # 标题
     title: '标题：ruoyi-ai管理系统_接口文档'
@@ -203,6 +212,10 @@ springdoc:
       name:  ageerle
       email: ageerle@163.com
       url: https://gitee.com/ageerle/ruoyi-ai
+
+knife4j:
+  # 是否启用 knife4j 文档增强（访问 /doc.html）
+  enable: true
 
   #这里定义了两个分组，可定义多个，也可以不定义
   group-configs:
