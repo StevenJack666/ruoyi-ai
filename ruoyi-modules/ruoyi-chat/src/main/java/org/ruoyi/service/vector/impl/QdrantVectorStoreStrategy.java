@@ -13,11 +13,9 @@ import io.qdrant.client.QdrantGrpcClient;
 import io.qdrant.client.grpc.Collections.Distance;
 import io.qdrant.client.grpc.Collections.VectorParams;
 import io.qdrant.client.grpc.JsonWithInt;
-import io.qdrant.client.grpc.Points.DenseVector;
 import io.qdrant.client.grpc.Points.Query;
 import io.qdrant.client.grpc.Points.QueryPoints;
 import io.qdrant.client.grpc.Points.ScoredPoint;
-import io.qdrant.client.grpc.Points.VectorInput;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.chat.service.chat.IChatModelService;
 import org.ruoyi.common.core.exception.ServiceException;
@@ -25,6 +23,7 @@ import org.ruoyi.config.VectorStoreProperties;
 import org.ruoyi.domain.bo.vector.QueryVectorBo;
 import org.ruoyi.domain.bo.vector.StoreEmbeddingBo;
 import org.ruoyi.factory.EmbeddingModelFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.stereotype.Component;
 
 import static io.qdrant.client.VectorInputFactory.vectorInput;
@@ -39,6 +38,7 @@ import java.util.stream.IntStream;
  */
 @Slf4j
 @Component
+@ConditionalOnClass(name = "io.qdrant.client.QdrantClient")
 public class QdrantVectorStoreStrategy extends AbstractVectorStoreStrategy {
 
     private static final String VECTOR_STORE_TYPE   = "qdrant";

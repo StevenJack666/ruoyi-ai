@@ -9,6 +9,7 @@ import org.ruoyi.service.vector.VectorStoreService;
 import org.ruoyi.service.vector.impl.MilvusVectorStoreStrategy;
 import org.ruoyi.service.vector.impl.QdrantVectorStoreStrategy;
 import org.ruoyi.service.vector.impl.WeaviateVectorStoreStrategy;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -28,7 +29,7 @@ public class VectorStoreStrategyFactory {
     private final VectorStoreProperties vectorStoreProperties;
     private final WeaviateVectorStoreStrategy weaviateStrategy;
     private final MilvusVectorStoreStrategy milvusStrategy;
-    private final QdrantVectorStoreStrategy qdrantStrategy;
+    private final ObjectProvider<QdrantVectorStoreStrategy> qdrantStrategyProvider;
 
     private Map<String, VectorStoreService> strategies;
 
@@ -37,7 +38,10 @@ public class VectorStoreStrategyFactory {
         strategies = new HashMap<>();
         strategies.put("weaviate", weaviateStrategy);
         strategies.put("milvus", milvusStrategy);
-        strategies.put("qdrant", qdrantStrategy);
+        QdrantVectorStoreStrategy qdrantStrategy = qdrantStrategyProvider.getIfAvailable();
+        if (qdrantStrategy != null) {
+            strategies.put("qdrant", qdrantStrategy);
+        }
         log.info("向量库策略工厂初始化完成，支持的策略: {}", strategies.keySet());
     }
 
