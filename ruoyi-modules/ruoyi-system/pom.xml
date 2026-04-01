@@ -89,7 +89,11 @@
             <groupId>org.ruoyi</groupId>
             <artifactId>ruoyi-common-social</artifactId>
         </dependency>
-
+        <dependency>
+            <groupId>org.ruoyi</groupId>
+            <artifactId>ruoyi-common-mybatis</artifactId>
+            <version>${revision}</version>
+        </dependency>
     </dependencies>
 
 </project>
