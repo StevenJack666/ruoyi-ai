@@ -17,6 +17,21 @@ public class ChatMessageDTO {
     private String role;
 
     /**
+     * 用户ID
+     */
+    private Long userId;
+
+    /**
+     * 消息分类：text/file/workflow
+     */
+    private String category;
+
+    /**
+     * 拓展字段
+     */
+    private String ext;
+
+    /**
      * 消息内容
      */
     private String content;

@@ -158,8 +158,11 @@ public class ChatMessageServiceImpl implements IChatMessageService {
         return voList.stream()
                 .map(vo -> {
                     ChatMessageDTO dto = new ChatMessageDTO();
+                    dto.setUserId(vo.getUserId());
                     dto.setRole(vo.getRole());
                     dto.setContent(vo.getContent());
+                    dto.setCategory(vo.getCategory());
+                    dto.setExt(vo.getExt());
                     return dto;
                 })
                 .collect(java.util.stream.Collectors.toList());

@@ -57,6 +57,12 @@ public class ChatMessageVo implements Serializable {
     private String role;
 
     /**
+     * 消息分类
+     */
+    @ExcelProperty(value = "消息分类")
+    private String category;
+
+    /**
      * 扣除金额
      */
     @ExcelProperty(value = "扣除金额")
@@ -86,6 +92,12 @@ public class ChatMessageVo implements Serializable {
      */
     @ExcelProperty(value = "备注")
     private String remark;
+
+    /**
+     * 拓展字段
+     */
+    @ExcelProperty(value = "拓展字段")
+    private String ext;
 
 
 }

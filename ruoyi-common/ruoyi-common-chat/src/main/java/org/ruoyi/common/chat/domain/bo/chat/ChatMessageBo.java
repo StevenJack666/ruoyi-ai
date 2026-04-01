@@ -49,6 +49,11 @@ public class ChatMessageBo extends BaseEntity {
     private String role;
 
     /**
+     * 消息分类
+     */
+    private String category;
+
+    /**
      * 扣除金额
      */
     private Long deductCost;
@@ -73,5 +78,8 @@ public class ChatMessageBo extends BaseEntity {
      */
     private String remark;
 
-
+    /**
+     * 拓展字段
+     */
+    private String ext;
 }

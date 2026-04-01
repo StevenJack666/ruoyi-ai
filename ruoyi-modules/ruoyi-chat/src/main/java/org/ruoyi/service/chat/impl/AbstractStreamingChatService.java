@@ -2,18 +2,37 @@ package org.ruoyi.service.chat.impl;
 
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
+import com.alibaba.fastjson.JSONObject;
+import dev.langchain4j.agentic.AgenticServices;
+import dev.langchain4j.agentic.supervisor.SupervisorAgent;
+import dev.langchain4j.agentic.supervisor.SupervisorResponseStrategy;
+import dev.langchain4j.community.model.dashscope.QwenChatModel;
+import dev.langchain4j.data.message.*;
+import dev.langchain4j.mcp.McpToolProvider;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.transport.McpTransport;
+import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
+import dev.langchain4j.service.tool.ToolProvider;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.ruoyi.agent.ChartGenerationAgent;
+import org.ruoyi.agent.SqlAgent;
+import org.ruoyi.agent.tool.ExecuteSqlQueryTool;
+import org.ruoyi.agent.tool.QueryAllTablesTool;
+import org.ruoyi.agent.tool.QueryTableSchemaTool;
 import org.ruoyi.common.chat.base.ThreadContext;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
+import org.ruoyi.common.chat.domain.dto.request.FileRunner;
 import org.ruoyi.common.chat.domain.dto.request.ReSumeRunner;
 import org.ruoyi.common.chat.domain.dto.request.WorkFlowRunner;
 import org.ruoyi.common.chat.domain.vo.chat.ChatModelVo;
 import org.ruoyi.common.chat.entity.chat.ChatContext;
+import org.ruoyi.common.chat.enums.MessageType;
 import org.ruoyi.common.chat.enums.RoleType;
 import org.ruoyi.common.chat.service.chat.IChatService;
 import org.ruoyi.common.chat.service.chatMessage.AbstractChatMessageService;
@@ -32,7 +51,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.io.*;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * 流式聊天服务抽象基类 - 支持上下文和长期记忆
@@ -70,7 +92,7 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
     /**
      * 获取工作流启用Bean对象
      */
-    private static final IWorkFlowStarterService starterService = SpringUtils.getBean(IWorkFlowStarterService.class);
+    private final IWorkFlowStarterService starterService = SpringUtils.getBean(IWorkFlowStarterService.class);
 
     /**
      * 定义聊天流程骨架
@@ -102,14 +124,14 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
                     .findFirst()
                     .orElse(""));
 
-            // 保存用户消息
-            saveChatMessage(chatRequest, userId, content, RoleType.USER.getName(), chatModelVo);
+            // 处理聊天消息
+            processChatMessage(chatRequest, content, userId, chatModelVo);
 
             // 判断用户是否重新输入
             boolean isResume = chatRequest.getIsResume() != null && chatRequest.getIsResume();
-            if (isResume){
+            if (isResume) {
                 ReSumeRunner reSumeRunner = chatRequest.getReSumeRunner();
-                if (ObjectUtils.isNotEmpty(reSumeRunner)){
+                if (ObjectUtils.isNotEmpty(reSumeRunner)) {
                     starterService.resumeFlow(reSumeRunner.getRuntimeUuid(), reSumeRunner.getFeedbackContent(), emitter);
                     return emitter;
                 }
@@ -119,7 +141,7 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
             boolean enableWorkFlow = chatRequest.getEnableWorkFlow() != null && chatRequest.getEnableWorkFlow();
             if (enableWorkFlow) {
                 WorkFlowRunner runner = chatRequest.getWorkFlowRunner();
-                if (ObjectUtils.isNotEmpty(runner)){
+                if (ObjectUtils.isNotEmpty(runner)) {
                     return starterService.streaming(ThreadContext.getCurrentUser(), runner.getUuid(), runner.getInputs(), chatRequest.getSessionId());
                 }
             }
@@ -131,7 +153,7 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
                 SseMessageUtils.sendMessage(userId, msg);
                 SseMessageUtils.completeConnection(userId, tokenValue);
                 // 保存助手回复消息
-                saveChatMessage(chatRequest, userId, msg, RoleType.ASSISTANT.getName(), chatModelVo);
+                saveChatMessage(chatRequest, userId, msg, RoleType.ASSISTANT.getName(), MessageType.TEXT.getName(), chatModelVo);
             } else {
                 // 创建包含内存管理的响应处理器
                 handler = ObjectUtils.isEmpty(handler) ? createResponseHandler(chatRequest, userId, tokenValue, chatModelVo) : handler;
@@ -147,6 +169,40 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
     }
 
     /**
+     * 处理聊天消息
+     */
+    private void processChatMessage(ChatRequest chatRequest, String content, Long userId, ChatModelVo chatModelVo) {
+        // 获取是否上传文件
+        boolean isUploadFile = chatRequest.getIsUploadFile() != null && chatRequest.getIsUploadFile();
+        // 1. 非上传文件场景：保存用户输入的文本消息
+        if (!isUploadFile) {
+            saveChatMessage(chatRequest, userId, content, RoleType.USER.getName(), MessageType.TEXT.getName(), chatModelVo);
+            return;
+        }
+
+        // 2. 文件上传场景：提取文件信息
+        FileRunner fileRunner = chatRequest.getFileRunner();
+        if (ObjectUtils.isEmpty(fileRunner)) {
+            saveChatMessage(chatRequest, userId, content, RoleType.USER.getName(), MessageType.TEXT.getName(), chatModelVo);
+            return;
+        }
+
+        // 3.提取文件的主键信息
+        List<Long> ossIds = fileRunner.getOssIds();
+        if (CollectionUtils.isEmpty(ossIds)) {
+            saveChatMessage(chatRequest, userId, content, RoleType.USER.getName(), MessageType.TEXT.getName(), chatModelVo);
+            return;
+        }
+
+        // 4. 封装文件信息
+        String ossStr = ossIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+        // 5. 获取文件元数据（前端拼接使用）
+        String fileMetadata = chatRequest.getFileMetaData();
+        // 6. 保存数据
+        saveChatMessage(chatRequest, userId, content, RoleType.USER.getName(), MessageType.FILE.getName(), ossStr, fileMetadata, chatModelVo);
+    }
+
+    /**
      * 构建包含历史消息和当前请求的完整消息列表（长期记忆）
      * 返回: 历史消息 + 当前请求消息
      * 确保即使第一次对话也有消息上下文
@@ -158,7 +214,7 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
         List<ChatMessage> messages = new ArrayList<>();
         // 工作流对话消息
         List<ChatMessage> chatMessages = chatRequest.getChatMessages();
-        if (!CollectionUtils.isEmpty(chatMessages)){
+        if (!CollectionUtils.isEmpty(chatMessages)) {
             messages.addAll(chatMessages);
         }
         // 开启长期记忆
@@ -189,10 +245,10 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
             try {
                 PersistentChatMemoryStore store = new PersistentChatMemoryStore();
                 return MessageWindowChatMemory.builder()
-                        .id(memoryId)
-                        .maxMessages(DEFAULT_MAX_MESSAGES)
-                        .chatMemoryStore(store)
-                        .build();
+                    .id(memoryId)
+                    .maxMessages(DEFAULT_MAX_MESSAGES)
+                    .chatMemoryStore(store)
+                    .build();
             } catch (Exception e) {
                 log.warn("创建聊天内存失败: {}", e.getMessage());
                 return null;
@@ -246,7 +302,7 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
                         log.warn("{}接收到空消息", getProviderName());
                     } else {
                         // 保存助手回复消息
-                        saveChatMessage(chatRequest, userId, fullMessage, RoleType.ASSISTANT.getName(), chatModelVo);
+                        saveChatMessage(chatRequest, userId, fullMessage, RoleType.ASSISTANT.getName(), MessageType.TEXT.getName(),  chatModelVo);
                     }
 
                     // 关闭SSE连接
@@ -295,4 +351,6 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
      * 子类必须实现此方法，返回对应厂商的模型实例
      */
     protected abstract StreamingChatModel buildStreamingChatModel(ChatModelVo chatModelVo, ChatRequest chatRequest);
+
+
 }

@@ -17,9 +17,7 @@ public enum RoleType {
     USER("user"),
     ASSISTANT("assistant"),
     FUNCTION("function"),
-    TOOL("tool"),
-    WORKFLOW("workFlow")
-    ;
+    TOOL("tool");
 
     private final String name;
 

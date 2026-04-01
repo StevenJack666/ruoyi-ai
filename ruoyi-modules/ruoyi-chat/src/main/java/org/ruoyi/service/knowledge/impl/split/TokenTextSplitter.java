@@ -2,7 +2,7 @@ package org.ruoyi.service.knowledge.impl.split;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.ruoyi.service.knowledge.TextSplitter;
+import org.ruoyi.common.chat.knowledge.TextSplitter;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

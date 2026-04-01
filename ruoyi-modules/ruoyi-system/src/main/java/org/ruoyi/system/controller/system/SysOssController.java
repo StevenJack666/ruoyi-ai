@@ -5,19 +5,21 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.hutool.core.util.ObjectUtil;
 import org.ruoyi.common.core.domain.R;
 import org.ruoyi.common.core.validate.QueryGroup;
+import org.ruoyi.common.oss.domain.vo.SysOssUploadVo;
+import org.ruoyi.common.oss.domain.vo.UploadVo;
 import org.ruoyi.common.web.core.BaseController;
 import org.ruoyi.common.log.annotation.Log;
 import org.ruoyi.common.log.enums.BusinessType;
 import org.ruoyi.common.mybatis.core.page.PageQuery;
 import org.ruoyi.common.mybatis.core.page.TableDataInfo;
-import org.ruoyi.system.domain.bo.SysOssBo;
-import org.ruoyi.system.domain.vo.SysOssUploadVo;
-import org.ruoyi.system.domain.vo.SysOssVo;
-import org.ruoyi.system.service.ISysOssService;
+import org.ruoyi.common.oss.domain.bo.SysOssBo;
+import org.ruoyi.common.oss.domain.vo.SysOssVo;
+import org.ruoyi.common.oss.service.ISysOssService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.util.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -82,17 +84,17 @@ public class SysOssController extends BaseController {
     }
 
     /**
-     * 上传文件（千问百炼版）
+     * 上传文件
      *
-     * @param file 文件
+     * @param files 文件
      */
-    @Log(title = "上传文件（千问百炼版）", businessType = BusinessType.INSERT)
+    @Log(title = "上传文件", businessType = BusinessType.INSERT)
     @PostMapping(value = "/fileUpload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public R<SysOssUploadVo> fileUpload(@RequestPart("file") MultipartFile file) {
-        if (ObjectUtil.isNull(file)) {
+    public R<UploadVo> fileUpload(@RequestPart("files") MultipartFile[] files, String providerCode) {
+        if (files == null || files.length == 0) {
             return R.fail("上传文件不能为空");
         }
-        return R.ok(ossService.fileUpload(file));
+        return R.ok(ossService.fileUpload(files, providerCode));
     }
 
     /**

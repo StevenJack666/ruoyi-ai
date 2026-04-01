@@ -2,6 +2,7 @@ package org.ruoyi.workflow.util;
 
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.chat.domain.vo.chat.ChatModelVo;
+import org.ruoyi.common.chat.enums.MessageType;
 import org.ruoyi.common.chat.enums.RoleType;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.core.exception.ServiceException;
@@ -64,7 +65,7 @@ public class WorkflowMessageUtil {
             ChatRequest chatRequest = new ChatRequest();
             chatRequest.setSessionId(sessionId);
             WorkflowUtil workflowUtil = SpringUtils.getBean(WorkflowUtil.class);
-            workflowUtil.saveChatMessage(chatRequest, userId, message, RoleType.WORKFLOW.getName(), new ChatModelVo());
+            workflowUtil.saveChatMessage(chatRequest, userId, message, RoleType.ASSISTANT.getName(), MessageType.WORKFLOW.getName(), new ChatModelVo());
         }
     }
 

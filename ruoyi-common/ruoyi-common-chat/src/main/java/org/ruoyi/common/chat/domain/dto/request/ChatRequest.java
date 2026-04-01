@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.ruoyi.common.chat.domain.dto.ChatMessageDTO;
 
+import com.alibaba.fastjson.JSONObject;
 import dev.langchain4j.data.message.ChatMessage;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
@@ -93,4 +94,18 @@ public class ChatRequest {
      */
     private Long agentMarketId;
 
+    /**
+     * 文件信息体
+     */
+    private FileRunner fileRunner;
+
+    /**
+     * 是否上传文件
+     */
+    private Boolean isUploadFile;
+
+    /**
+     * 文件元数据
+     */
+    private String fileMetaData;
 }
