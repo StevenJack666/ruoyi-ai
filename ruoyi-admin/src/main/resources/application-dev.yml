@@ -20,7 +20,7 @@ mcp:
 --- # 上传文件地址
 sys:
   upload:
-    path: D:\\DownLoad
+    path: /Users/zhangmingming
 
 --- # snail-job 配置
 snail-job:
@@ -62,10 +62,10 @@ spring:
           username: root
           password: Qzhang450000
         agent:
-          url: jdbc:mysql://127.0.0.1:3306/test?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
+          url: jdbc:mysql://127.0.0.1:3306/ruoyi_ai_agent?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&autoReconnect=true&rewriteBatchedStatements=true&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
           # url: jdbc:mysql://localhost:3306/agent_db
-          username: Qzhang450000
-          password: root
+          username: root
+          password: Qzhang450000
           driverClassName: com.mysql.cj.jdbc.Driver
 
       hikari:
