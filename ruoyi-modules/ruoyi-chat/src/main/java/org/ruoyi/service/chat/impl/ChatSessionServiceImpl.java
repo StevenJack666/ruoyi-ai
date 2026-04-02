@@ -90,6 +90,10 @@ public class ChatSessionServiceImpl implements IChatSessionService {
     public Boolean insertByBo(ChatSessionBo bo) {
         ChatSession add = MapstructUtils.convert(bo, ChatSession.class);
         validEntityBeforeSave(add);
+
+
+
+        // todo 对会话标题调用大模型做一个总结
         boolean flag = baseMapper.insert(add) > 0;
         if (flag) {
             bo.setId(add.getId());
