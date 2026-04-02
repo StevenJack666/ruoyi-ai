@@ -19,7 +19,6 @@ import org.ruoyi.mapper.mcp.McpToolMapper;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,7 +69,7 @@ public class LangChain4jMcpToolProviderService {
      */
     public ToolProvider getToolProvider(List<Long> toolIds) {
         if (toolIds == null || toolIds.isEmpty()) {
-            return McpToolProvider.builder().mcpClients(Collections.emptyList()).build();
+            return McpToolProvider.builder().build();
         }
 
         List<McpClient> clients = new ArrayList<>();
@@ -86,9 +85,7 @@ public class LangChain4jMcpToolProviderService {
         }
 
         if (clients.isEmpty()) {
-            return McpToolProvider.builder()
-                .mcpClients(Collections.emptyList())
-                .build();
+            return McpToolProvider.builder().build();
         }
 
         return McpToolProvider.builder()
@@ -108,7 +105,7 @@ public class LangChain4jMcpToolProviderService {
         );
 
         if (enabledTools.isEmpty()) {
-            return McpToolProvider.builder().mcpClients(Collections.emptyList()).build();
+            return McpToolProvider.builder().build();
         }
 
         List<Long> toolIds = enabledTools.stream()
@@ -126,7 +123,7 @@ public class LangChain4jMcpToolProviderService {
      */
     public ToolProvider getToolProviderByNames(List<String> toolNames) {
         if (toolNames == null || toolNames.isEmpty()) {
-            return McpToolProvider.builder().mcpClients(Collections.emptyList()).build();
+            return McpToolProvider.builder().build();
         }
 
         List<McpTool> tools = mcpToolMapper.selectList(
@@ -136,7 +133,7 @@ public class LangChain4jMcpToolProviderService {
         );
 
         if (tools.isEmpty()) {
-            return McpToolProvider.builder().mcpClients(Collections.emptyList()).build();
+            return McpToolProvider.builder().build();
         }
 
         List<Long> toolIds = tools.stream()
