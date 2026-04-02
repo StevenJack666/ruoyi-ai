@@ -146,6 +146,8 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
                 }
             }
 
+            // TODO: 意图识别智能选择Agent
+
             // 使用长期记忆增强的消息列表
             List<ChatMessage> messagesWithMemory = buildMessagesWithMemory(chatRequest);
             if (chatRequest.getEnableThinking()) {
