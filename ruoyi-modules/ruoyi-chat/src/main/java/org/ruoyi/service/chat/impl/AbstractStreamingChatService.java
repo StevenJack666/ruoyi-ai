@@ -42,6 +42,7 @@ import org.ruoyi.common.core.utils.SpringUtils;
 import org.ruoyi.common.core.utils.StringUtils;
 import org.ruoyi.common.sse.utils.SseMessageUtils;
 import org.ruoyi.service.chat.agent.AgentExecutorRouter;
+import org.ruoyi.service.chat.AgentIntentRoutingService;
 import org.ruoyi.service.chat.impl.memory.PersistentChatMemoryStore;
 import org.springframework.util.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
@@ -146,11 +147,12 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
                 }
             }
 
-            // TODO: 意图识别智能选择Agent
+            boolean hasMatchedAgentMarket = autoSelectAgentMarket(chatRequest, content);
 
             // 使用长期记忆增强的消息列表
             List<ChatMessage> messagesWithMemory = buildMessagesWithMemory(chatRequest);
-            if (chatRequest.getEnableThinking()) {
+            boolean useAgentMode = Boolean.TRUE.equals(chatRequest.getEnableThinking()) || hasMatchedAgentMarket;
+            if (useAgentMode) {
                 String msg = doAgent(content, chatModelVo, chatRequest);
                 SseMessageUtils.sendMessage(userId, msg);
                 SseMessageUtils.completeConnection(userId, tokenValue);
@@ -346,6 +348,33 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
         log.info("执行Agent任务，消息: {}", userMessage);
         AgentExecutorRouter router = SpringUtils.getBean(AgentExecutorRouter.class);
         return router.execute(userMessage, chatModelVo, chatRequest);
+    }
+
+    private boolean autoSelectAgentMarket(ChatRequest chatRequest, String content) {
+        if (chatRequest == null) {
+            return false;
+        }
+        if (chatRequest.getAgentMarketId() != null) {
+            return true;
+        }
+        if (StringUtils.isBlank(content)) {
+            return false;
+        }
+
+        try {
+            AgentIntentRoutingService routingService = SpringUtils.getBean(AgentIntentRoutingService.class);
+            Optional<AgentIntentRoutingService.AgentMatchResult> match = routingService.selectBestMatch(content);
+            if (match.isPresent()) {
+                AgentIntentRoutingService.AgentMatchResult result = match.get();
+                chatRequest.setAgentMarketId(result.marketId());
+                log.info("根据输入意图自动选择Agent marketId={}, marketName={}, score={}",
+                    result.marketId(), result.marketName(), result.score());
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn("自动选择Agent失败，继续走默认执行器: {}", e.getMessage());
+        }
+        return false;
     }
 
     /**
