@@ -367,7 +367,7 @@ public abstract class AbstractStreamingChatService extends AbstractChatMessageSe
             if (match.isPresent()) {
                 AgentIntentRoutingService.AgentMatchResult result = match.get();
                 chatRequest.setAgentMarketId(result.marketId());
-                log.info("根据输入意图自动选择Agent marketId={}, marketName={}, score={}",
+                log.debug("根据输入意图自动选择Agent marketId={}, marketName={}, score={}",
                     result.marketId(), result.marketName(), result.score());
                 return true;
             }
