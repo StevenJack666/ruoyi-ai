@@ -133,6 +133,13 @@
             <groupId>org.ruoyi</groupId>
             <artifactId>ruoyi-common-oss</artifactId>
         </dependency>
+
+        <!-- pom.xml -->
+        <dependency>
+            <groupId>com.hankcs</groupId>
+            <artifactId>hanlp</artifactId>
+            <version>portable-1.8.4</version>
+        </dependency>
     </dependencies>
 
 </project>
