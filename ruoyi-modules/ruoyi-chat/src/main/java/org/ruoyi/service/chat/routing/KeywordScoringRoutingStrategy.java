@@ -1,16 +1,13 @@
 package org.ruoyi.service.chat.routing;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import org.ruoyi.common.core.utils.StringUtils;
 import org.ruoyi.domain.entity.agent.AiMarket;
 import org.ruoyi.mapper.agent.AiMarketMapper;
+import org.ruoyi.util.HanLPTokenizerUtil;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -36,7 +33,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class KeywordScoringRoutingStrategy implements AgentIntentRoutingStrategy {
 
-    private static final Pattern TOKEN_PATTERN = Pattern.compile("[\\p{IsHan}\\p{Alnum}_-]+");
     private static final int MIN_MATCH_SCORE = 30;
     private static final int QUERY_PAGE_SIZE = 100;
     private static final int STRATEGY_ORDER = 100;
@@ -56,7 +52,8 @@ public class KeywordScoringRoutingStrategy implements AgentIntentRoutingStrategy
     @Override
     public Optional<AgentMatchResult> match(String userInput) {
         String normalizedInput = normalize(userInput);
-        Set<String> inputTokens = tokenize(normalizedInput);
+        Set<String> inputTokens = HanLPTokenizerUtil.tokenize(normalizedInput);
+        log.info("用户输入：{}, 标准化：{}, 分词：{}", userInput, normalizedInput, inputTokens);
 
         long currentPage = 1L;
         AgentMatchResult best = null;
@@ -108,9 +105,6 @@ public class KeywordScoringRoutingStrategy implements AgentIntentRoutingStrategy
         }
 
         for (String token : inputTokens) {
-            if (token.length() < 2) {
-                continue;
-            }
             if (marketName.contains(token)) {
                 score += 30;
                 continue;
@@ -128,20 +122,5 @@ public class KeywordScoringRoutingStrategy implements AgentIntentRoutingStrategy
             return "";
         }
         return text.toLowerCase(Locale.ROOT).trim().replaceAll("\\s+", " ");
-    }
-
-    private Set<String> tokenize(String text) {
-        Set<String> tokens = new HashSet<>();
-        if (StringUtils.isBlank(text)) {
-            return tokens;
-        }
-        Matcher matcher = TOKEN_PATTERN.matcher(text);
-        while (matcher.find()) {
-            String token = matcher.group();
-            if (StringUtils.isNotBlank(token)) {
-                tokens.add(token);
-            }
-        }
-        return tokens;
     }
 }
