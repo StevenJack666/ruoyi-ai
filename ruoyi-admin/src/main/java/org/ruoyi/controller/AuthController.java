@@ -99,7 +99,7 @@ public class AuthController {
         Long userId = LoginHelper.getUserId();
         scheduledExecutorService.schedule(() -> {
             SseMessageDto dto = new SseMessageDto();
-            dto.setMessage("欢迎登录ruoyi-ai后台管理系统");
+            // dto.setMessage("欢迎登录");
             dto.setUserIds(List.of(userId));
             SseMessageUtils.publishMessage(dto);
         }, 5, TimeUnit.SECONDS);
@@ -140,8 +140,8 @@ public class AuthController {
         StpUtil.checkLogin();
         // 获取第三方登录信息
         AuthResponse<AuthUser> response = SocialUtils.loginAuth(
-                loginBody.getSource(), loginBody.getSocialCode(),
-                loginBody.getSocialState(), socialProperties);
+            loginBody.getSource(), loginBody.getSocialCode(),
+            loginBody.getSocialState(), socialProperties);
         AuthUser authUserData = response.getData();
         // 判断授权响应是否成功
         if (!response.ok()) {
