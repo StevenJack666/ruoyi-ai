@@ -1,0 +1,23 @@
+package org.ruoyi.common.bus.service;
+
+import org.ruoyi.common.bus.domain.BusMessageHistory;
+import org.ruoyi.common.mybatis.core.page.PageQuery;
+import org.ruoyi.common.mybatis.core.page.TableDataInfo;
+
+import java.util.List;
+
+/**
+ * 消息中心服务
+ */
+public interface IBusMessageService {
+
+    void saveMessage(Long userId, String messageId, String message, Long sendTime);
+
+    List<BusMessageHistory> listUnread(Long userId);
+
+    void ackMessages(Long userId, List<String> messageIds);
+
+    void ackAll(Long userId);
+
+    TableDataInfo<BusMessageHistory> pageHistory(Long userId, PageQuery pageQuery);
+}

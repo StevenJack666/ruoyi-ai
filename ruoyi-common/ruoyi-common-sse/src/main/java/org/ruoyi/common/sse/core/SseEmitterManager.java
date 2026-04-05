@@ -1,13 +1,5 @@
 package org.ruoyi.common.sse.core;
 
-import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.map.MapUtil;
-import lombok.extern.slf4j.Slf4j;
-import org.ruoyi.common.core.utils.SpringUtils;
-import org.ruoyi.common.redis.utils.RedisUtils;
-import org.ruoyi.common.sse.dto.SseMessageDto;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +7,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
+
+import org.ruoyi.common.bus.domain.BusMessageHistory;
+import org.ruoyi.common.bus.service.IBusMessageService;
+import org.ruoyi.common.core.utils.SpringUtils;
+import org.ruoyi.common.json.utils.JsonUtils;
+import org.ruoyi.common.sse.dto.SseMessageDto;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.map.MapUtil;
+import cn.hutool.core.util.IdUtil;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 管理 Server-Sent Events (SSE) 连接
@@ -25,12 +29,10 @@ import java.util.function.Consumer;
 @Slf4j
 public class SseEmitterManager {
 
-    /**
-     * 订阅的频道
-     */
-    private final static String SSE_TOPIC = "global:sse";
-
     private final static Map<Long, Map<String, SseEmitter>> USER_TOKEN_EMITTERS = new ConcurrentHashMap<>();
+
+    @Autowired
+    private IBusMessageService busMessageService;
 
     public SseEmitterManager() {
         // 定时执行 SSE 心跳检测
@@ -84,6 +86,7 @@ public class SseEmitterManager {
         try {
             // 向客户端发送一条连接成功的事件
             emitter.send(SseEmitter.event().comment("connected"));
+            replayUnreadMessages(userId, emitter);
         } catch (IOException e) {
             // 如果发送消息失败，则从映射表中移除 emitter
             emitters.remove(token);
@@ -155,15 +158,6 @@ public class SseEmitterManager {
     }
 
     /**
-     * 订阅SSE消息主题，并提供一个消费者函数来处理接收到的消息
-     *
-     * @param consumer 处理SSE消息的消费者函数
-     */
-    public void subscribeMessage(Consumer<SseMessageDto> consumer) {
-        RedisUtils.subscribe(SSE_TOPIC, SseMessageDto.class, consumer);
-    }
-
-    /**
      * 向指定的用户会话发送消息
      *
      * @param userId  要发送消息的用户id
@@ -190,6 +184,35 @@ public class SseEmitterManager {
     }
 
     /**
+     * 向指定用户发送结构化消息(包含消息ID/时间戳)
+     *
+     * @return true=至少有一个连接发送成功
+     */
+    public boolean sendMessage(Long userId, SseMessageDto sseMessageDto) {
+        Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.get(userId);
+        if (MapUtil.isEmpty(emitters)) {
+            USER_TOKEN_EMITTERS.remove(userId);
+            return false;
+        }
+        String payload = JsonUtils.toJsonString(sseMessageDto);
+        boolean delivered = false;
+        for (Map.Entry<String, SseEmitter> entry : emitters.entrySet()) {
+            try {
+                entry.getValue().send(SseEmitter.event()
+                    .name("message")
+                    .data(payload));
+                delivered = true;
+            } catch (Exception e) {
+                SseEmitter remove = emitters.remove(entry.getKey());
+                if (remove != null) {
+                    remove.complete();
+                }
+            }
+        }
+        return delivered;
+    }
+
+    /**
      * 本机全用户会话发送消息
      *
      * @param message 要发送的消息内容
@@ -201,18 +224,45 @@ public class SseEmitterManager {
     }
 
     /**
+     * 本机全用户会话发送结构化消息
+     */
+    public void sendMessage(SseMessageDto sseMessageDto) {
+        for (Long userId : USER_TOKEN_EMITTERS.keySet()) {
+            sendMessage(userId, sseMessageDto);
+        }
+    }
+
+    /**
+     * 分发消息: 在线实时推送，离线存储待回执
+     */
+    public void dispatchMessage(SseMessageDto sseMessageDto) {
+        if (sseMessageDto == null) {
+            return;
+        }
+        if (CollUtil.isNotEmpty(sseMessageDto.getUserIds())) {
+            sseMessageDto.getUserIds().forEach(userId -> {
+                busMessageService.saveMessage(userId, sseMessageDto.getMessageId(), sseMessageDto.getMessage(), sseMessageDto.getSendTime());
+                sendMessage(userId, sseMessageDto);
+            });
+        } else {
+            sendMessage(sseMessageDto);
+        }
+    }
+
+    /**
      * 发布SSE订阅消息
      *
      * @param sseMessageDto 要发布的SSE消息对象
      */
     public void publishMessage(SseMessageDto sseMessageDto) {
         SseMessageDto broadcastMessage = new SseMessageDto();
+        broadcastMessage.setMessageId(buildMessageId());
+        broadcastMessage.setSendTime(System.currentTimeMillis());
         broadcastMessage.setMessage(sseMessageDto.getMessage());
         broadcastMessage.setUserIds(sseMessageDto.getUserIds());
-        RedisUtils.publish(SSE_TOPIC, broadcastMessage, consumer -> {
-            log.info("SSE发送主题订阅消息topic:{} session keys:{} message:{}",
-                SSE_TOPIC, sseMessageDto.getUserIds(), sseMessageDto.getMessage());
-        });
+        dispatchMessage(broadcastMessage);
+        log.info("SSE发送本地消息 session keys:{} message:{}",
+            sseMessageDto.getUserIds(), sseMessageDto.getMessage());
     }
 
     /**
@@ -222,9 +272,40 @@ public class SseEmitterManager {
      */
     public void publishAll(String message) {
         SseMessageDto broadcastMessage = new SseMessageDto();
+        broadcastMessage.setMessageId(buildMessageId());
+        broadcastMessage.setSendTime(System.currentTimeMillis());
         broadcastMessage.setMessage(message);
-        RedisUtils.publish(SSE_TOPIC, broadcastMessage, consumer -> {
-            log.info("SSE发送主题订阅消息topic:{} message:{}", SSE_TOPIC, message);
+        broadcastMessage.setUserIds(new ArrayList<>(USER_TOKEN_EMITTERS.keySet()));
+        dispatchMessage(broadcastMessage);
+        log.info("SSE发送本机群发消息 message:{} online users:{}",
+            message, broadcastMessage.getUserIds().size());
+    }
+
+    /**
+     * 读取 bus 未读并转换为 SSE 事件格式后回放给当前连接。
+     */
+    private void replayUnreadMessages(Long userId, SseEmitter emitter) {
+        List<BusMessageHistory> unreadMessages = busMessageService.listUnread(userId);
+        if (CollUtil.isEmpty(unreadMessages)) {
+            return;
+        }
+        unreadMessages.forEach(record -> {
+            try {
+                SseMessageDto message = new SseMessageDto();
+                message.setMessageId(record.getMessageId());
+                message.setMessage(record.getMessage());
+                message.setSendTime(record.getSendTime());
+                message.setUserIds(List.of(record.getUserId()));
+                emitter.send(SseEmitter.event()
+                    .name("message")
+                    .data(JsonUtils.toJsonString(message)));
+            } catch (Exception e) {
+                log.warn("回放离线消息失败 userId={} messageId={}", userId, record.getMessageId(), e);
+            }
         });
+    }
+
+    private String buildMessageId() {
+        return IdUtil.fastSimpleUUID();
     }
 }

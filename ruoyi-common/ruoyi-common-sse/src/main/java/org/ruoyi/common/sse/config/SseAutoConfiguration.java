@@ -2,7 +2,6 @@ package org.ruoyi.common.sse.config;
 
 import org.ruoyi.common.sse.controller.SseController;
 import org.ruoyi.common.sse.core.SseEmitterManager;
-import org.ruoyi.common.sse.listener.SseTopicListener;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -21,11 +20,6 @@ public class SseAutoConfiguration {
     @Bean
     public SseEmitterManager sseEmitterManager() {
         return new SseEmitterManager();
-    }
-
-    @Bean
-    public SseTopicListener sseTopicListener() {
-        return new SseTopicListener();
     }
 
     @Bean
