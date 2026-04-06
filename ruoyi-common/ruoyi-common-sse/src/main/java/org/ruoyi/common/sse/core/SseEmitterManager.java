@@ -163,8 +163,7 @@ public class SseEmitterManager {
      */
     public void sendMessage(Long userId, String message) {
         String messageId = buildMessageId();
-        long sendTime = System.currentTimeMillis();
-        busMessageService.saveMessage(userId, messageId, message, sendTime);
+        busMessageService.saveMessage(userId, messageId, message);
         sendTextMessage(userId, message);
     }
 
@@ -229,8 +228,7 @@ public class SseEmitterManager {
         }
         if (CollUtil.isNotEmpty(sseMessageDto.getUserIds())) {
             sseMessageDto.getUserIds().forEach(userId -> {
-                busMessageService.saveMessage(userId, sseMessageDto.getMessageId(), sseMessageDto.getMessage(),
-                    sseMessageDto.getSendTime());
+                busMessageService.saveMessage(userId, sseMessageDto.getMessageId(), sseMessageDto.getMessage());
                 sendMessage(userId, sseMessageDto);
             });
         } else {

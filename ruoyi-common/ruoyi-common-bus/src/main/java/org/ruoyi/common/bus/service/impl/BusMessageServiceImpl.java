@@ -1,9 +1,8 @@
 package org.ruoyi.common.bus.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.RequiredArgsConstructor;
+import java.util.Date;
+import java.util.List;
+
 import org.ruoyi.common.bus.domain.BusMessageHistory;
 import org.ruoyi.common.bus.mapper.BusMessageHistoryMapper;
 import org.ruoyi.common.bus.service.IBusMessageService;
@@ -11,8 +10,11 @@ import org.ruoyi.common.mybatis.core.page.PageQuery;
 import org.ruoyi.common.mybatis.core.page.TableDataInfo;
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
-import java.util.List;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * 消息中心服务实现
@@ -24,12 +26,11 @@ public class BusMessageServiceImpl implements IBusMessageService {
     private final BusMessageHistoryMapper busMessageHistoryMapper;
 
     @Override
-    public void saveMessage(Long userId, String messageId, String message, Long sendTime) {
+    public void saveMessage(Long userId, String messageId, String message) {
         BusMessageHistory history = new BusMessageHistory();
         history.setUserId(userId);
         history.setMessageId(messageId);
         history.setMessage(message);
-        history.setSendTime(sendTime);
         history.setReadStatus(0);
         busMessageHistoryMapper.upsert(history);
     }
@@ -39,7 +40,7 @@ public class BusMessageServiceImpl implements IBusMessageService {
         return busMessageHistoryMapper.selectList(new LambdaQueryWrapper<BusMessageHistory>()
             .eq(BusMessageHistory::getUserId, userId)
             .eq(BusMessageHistory::getReadStatus, 0)
-            .orderByAsc(BusMessageHistory::getSendTime)
+            .orderByAsc(BusMessageHistory::getCreateTime)
             .orderByAsc(BusMessageHistory::getId));
     }
 
@@ -53,7 +54,7 @@ public class BusMessageServiceImpl implements IBusMessageService {
             .in(BusMessageHistory::getMessageId, messageIds)
             .eq(BusMessageHistory::getReadStatus, 0)
             .set(BusMessageHistory::getReadStatus, 1)
-            .set(BusMessageHistory::getReadTime, new Date());
+            .set(BusMessageHistory::getUpdateTime, new Date());
         busMessageHistoryMapper.update(null, updateWrapper);
     }
 
@@ -63,7 +64,7 @@ public class BusMessageServiceImpl implements IBusMessageService {
             .eq(BusMessageHistory::getUserId, userId)
             .eq(BusMessageHistory::getReadStatus, 0)
             .set(BusMessageHistory::getReadStatus, 1)
-            .set(BusMessageHistory::getReadTime, new Date());
+            .set(BusMessageHistory::getUpdateTime, new Date());
         busMessageHistoryMapper.update(null, updateWrapper);
     }
 
@@ -72,7 +73,7 @@ public class BusMessageServiceImpl implements IBusMessageService {
         Page<BusMessageHistory> page = busMessageHistoryMapper.selectPage(pageQuery.build(),
             new LambdaQueryWrapper<BusMessageHistory>()
                 .eq(BusMessageHistory::getUserId, userId)
-                .orderByDesc(BusMessageHistory::getSendTime)
+                .orderByDesc(BusMessageHistory::getCreateTime)
                 .orderByDesc(BusMessageHistory::getId));
         return new TableDataInfo<>(page.getRecords(), page.getTotal());
     }
