@@ -39,17 +39,6 @@ public class SseMessageUtils {
         MANAGER.sendMessage(userId, message);
     }
 
-    /**
-     * 本机全用户会话发送消息
-     *
-     * @param message 要发送的消息内容
-     */
-    public static void sendMessage(String message) {
-        if (!isEnable()) {
-            return;
-        }
-        MANAGER.sendMessage(message);
-    }
 
     /**
      * 发布SSE订阅消息

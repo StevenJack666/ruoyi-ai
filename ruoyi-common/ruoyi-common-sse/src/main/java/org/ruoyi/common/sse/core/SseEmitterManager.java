@@ -162,6 +162,16 @@ public class SseEmitterManager {
      * @param message 要发送的消息内容
      */
     public void sendMessage(Long userId, String message) {
+        String messageId = buildMessageId();
+        long sendTime = System.currentTimeMillis();
+        busMessageService.saveMessage(userId, messageId, message, sendTime);
+        sendTextMessage(userId, message);
+    }
+
+    /**
+     * 仅执行文本消息实时推送，不包含持久化
+     */
+    private void sendTextMessage(Long userId, String message) {
         Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.get(userId);
         if (MapUtil.isNotEmpty(emitters)) {
             for (Map.Entry<String, SseEmitter> entry : emitters.entrySet()) {
@@ -186,7 +196,7 @@ public class SseEmitterManager {
      *
      * @return true=至少有一个连接发送成功
      */
-    public boolean sendMessage(Long userId, SseMessageDto sseMessageDto) {
+    private boolean sendMessage(Long userId, SseMessageDto sseMessageDto) {
         Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.get(userId);
         if (MapUtil.isEmpty(emitters)) {
             USER_TOKEN_EMITTERS.remove(userId);
@@ -211,39 +221,21 @@ public class SseEmitterManager {
     }
 
     /**
-     * 本机全用户会话发送消息
-     *
-     * @param message 要发送的消息内容
-     */
-    public void sendMessage(String message) {
-        for (Long userId : USER_TOKEN_EMITTERS.keySet()) {
-            sendMessage(userId, message);
-        }
-    }
-
-    /**
-     * 本机全用户会话发送结构化消息
-     */
-    public void sendMessage(SseMessageDto sseMessageDto) {
-        for (Long userId : USER_TOKEN_EMITTERS.keySet()) {
-            sendMessage(userId, sseMessageDto);
-        }
-    }
-
-    /**
      * 分发消息: 在线实时推送，离线存储待回执
      */
-    public void dispatchMessage(SseMessageDto sseMessageDto) {
+    private void dispatchMessage(SseMessageDto sseMessageDto) {
         if (sseMessageDto == null) {
             return;
         }
         if (CollUtil.isNotEmpty(sseMessageDto.getUserIds())) {
             sseMessageDto.getUserIds().forEach(userId -> {
-                busMessageService.saveMessage(userId, sseMessageDto.getMessageId(), sseMessageDto.getMessage(), sseMessageDto.getSendTime());
+                busMessageService.saveMessage(userId, sseMessageDto.getMessageId(), sseMessageDto.getMessage(),
+                    sseMessageDto.getSendTime());
                 sendMessage(userId, sseMessageDto);
             });
         } else {
-            sendMessage(sseMessageDto);
+            // todo 暂不支持
+            // sendMessage(sseMessageDto);
         }
     }
 
@@ -253,12 +245,12 @@ public class SseEmitterManager {
      * @param sseMessageDto 要发布的SSE消息对象
      */
     public void publishMessage(SseMessageDto sseMessageDto) {
-        SseMessageDto broadcastMessage = new SseMessageDto();
-        broadcastMessage.setMessageId(buildMessageId());
-        broadcastMessage.setSendTime(System.currentTimeMillis());
-        broadcastMessage.setMessage(sseMessageDto.getMessage());
-        broadcastMessage.setUserIds(sseMessageDto.getUserIds());
-        dispatchMessage(broadcastMessage);
+        if (sseMessageDto == null) {
+            return;
+        }
+        sseMessageDto.setMessageId(buildMessageId());
+        sseMessageDto.setSendTime(System.currentTimeMillis());
+        dispatchMessage(sseMessageDto);
         log.info("SSE发送本地消息 session keys:{} message:{}",
             sseMessageDto.getUserIds(), sseMessageDto.getMessage());
     }
