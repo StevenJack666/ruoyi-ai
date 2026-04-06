@@ -1,12 +1,12 @@
 package org.ruoyi.system.service;
 
+import java.util.List;
+
 import org.ruoyi.common.mybatis.core.page.PageQuery;
 import org.ruoyi.common.mybatis.core.page.TableDataInfo;
 import org.ruoyi.system.domain.bo.SysUserBo;
 import org.ruoyi.system.domain.vo.SysUserExportVo;
 import org.ruoyi.system.domain.vo.SysUserVo;
-
-import java.util.List;
 
 /**
  * 用户 业务层
@@ -32,6 +32,14 @@ public interface ISysUserService {
      * @return 用户信息集合信息
      */
     List<SysUserExportVo> selectUserExportList(SysUserBo user);
+
+    /**
+     * 根据条件查询用户ID列表(仅返回user_id，降低内存占用)
+     *
+     * @param user 用户信息
+     * @return 用户ID列表
+     */
+    List<Long> selectUserIds(SysUserBo user);
 
     /**
      * 根据条件分页查询已分配用户角色列表

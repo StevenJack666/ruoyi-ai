@@ -232,6 +232,7 @@ public class SseEmitterManager {
                 sendMessage(userId, sseMessageDto);
             });
         } else {
+            log.error("平台用户全量推送,请确保消息内容合理，避免频繁发送大量消息导致性能问题！ message:{}", sseMessageDto.getMessage());
             // todo 暂不支持
             // sendMessage(sseMessageDto);
         }

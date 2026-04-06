@@ -1,24 +1,22 @@
 package org.ruoyi.system.service.impl;
 
-import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.convert.Convert;
-import cn.hutool.core.util.ArrayUtil;
-import cn.hutool.core.util.ObjectUtil;
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.ruoyi.common.core.constant.CacheNames;
 import org.ruoyi.common.core.constant.SystemConstants;
 import org.ruoyi.common.core.domain.dto.UserDTO;
 import org.ruoyi.common.core.exception.ServiceException;
 import org.ruoyi.common.core.service.UserService;
-import org.ruoyi.common.core.utils.*;
+import org.ruoyi.common.core.utils.MapstructUtils;
+import org.ruoyi.common.core.utils.ObjectUtils;
+import org.ruoyi.common.core.utils.SpringUtils;
+import org.ruoyi.common.core.utils.StreamUtils;
+import org.ruoyi.common.core.utils.StringUtils;
 import org.ruoyi.common.mybatis.core.page.PageQuery;
 import org.ruoyi.common.mybatis.core.page.TableDataInfo;
 import org.ruoyi.common.satoken.utils.LoginHelper;
@@ -30,14 +28,32 @@ import org.ruoyi.system.domain.vo.SysPostVo;
 import org.ruoyi.system.domain.vo.SysRoleVo;
 import org.ruoyi.system.domain.vo.SysUserExportVo;
 import org.ruoyi.system.domain.vo.SysUserVo;
-import org.ruoyi.system.mapper.*;
+import org.ruoyi.system.mapper.SysDeptMapper;
+import org.ruoyi.system.mapper.SysPostMapper;
+import org.ruoyi.system.mapper.SysRoleMapper;
+import org.ruoyi.system.mapper.SysUserMapper;
+import org.ruoyi.system.mapper.SysUserPostMapper;
+import org.ruoyi.system.mapper.SysUserRoleMapper;
 import org.ruoyi.system.service.ISysUserService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+
+import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.convert.Convert;
+import cn.hutool.core.util.ArrayUtil;
+import cn.hutool.core.util.ObjectUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 用户 业务层处理
@@ -84,6 +100,33 @@ public class SysUserServiceImpl implements ISysUserService, UserService {
                 w.in("u.dept_id", deptIds);
             }).orderByAsc("u.user_id");
         return baseMapper.selectUserExportList(wrapper);
+    }
+
+    @Override
+    public List<Long> selectUserIds(SysUserBo user) {
+        Map<String, Object> params = user.getParams();
+        LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
+        wrapper.select(SysUser::getUserId)
+            .eq(SysUser::getDelFlag, SystemConstants.NORMAL)
+            .eq(ObjectUtil.isNotNull(user.getUserId()), SysUser::getUserId, user.getUserId())
+            .in(StringUtils.isNotBlank(user.getUserIds()), SysUser::getUserId, StringUtils.splitTo(user.getUserIds(), Convert::toLong))
+            .like(StringUtils.isNotBlank(user.getUserName()), SysUser::getUserName, user.getUserName())
+            .like(StringUtils.isNotBlank(user.getNickName()), SysUser::getNickName, user.getNickName())
+            .eq(StringUtils.isNotBlank(user.getStatus()), SysUser::getStatus, user.getStatus())
+            .like(StringUtils.isNotBlank(user.getPhonenumber()), SysUser::getPhonenumber, user.getPhonenumber())
+            .between(params.get("beginTime") != null && params.get("endTime") != null,
+                SysUser::getCreateTime, params.get("beginTime"), params.get("endTime"))
+            .and(ObjectUtil.isNotNull(user.getDeptId()), w -> {
+                List<Long> ids = deptMapper.selectDeptAndChildById(user.getDeptId());
+                w.in(SysUser::getDeptId, ids);
+            })
+            .orderByAsc(SysUser::getUserId);
+        if (StringUtils.isNotBlank(user.getExcludeUserIds())) {
+            wrapper.notIn(SysUser::getUserId, StringUtils.splitTo(user.getExcludeUserIds(), Convert::toLong));
+        }
+        return baseMapper.selectList(wrapper).stream()
+            .map(SysUser::getUserId)
+            .toList();
     }
 
     private Wrapper<SysUser> buildQueryWrapper(SysUserBo user) {

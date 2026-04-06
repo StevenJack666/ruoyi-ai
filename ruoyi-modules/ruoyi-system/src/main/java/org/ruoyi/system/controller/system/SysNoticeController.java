@@ -15,7 +15,6 @@ import org.ruoyi.common.web.core.BaseController;
 import org.ruoyi.system.domain.bo.SysNoticeBo;
 import org.ruoyi.system.domain.bo.SysUserBo;
 import org.ruoyi.system.domain.vo.SysNoticeVo;
-import org.ruoyi.system.domain.vo.SysUserExportVo;
 import org.ruoyi.system.service.ISysNoticeService;
 import org.ruoyi.system.service.ISysUserService;
 import org.springframework.validation.annotation.Validated;
@@ -83,9 +82,7 @@ public class SysNoticeController extends BaseController {
         // 公告消息按全量用户分发，确保离线用户也会落库为未读。
         SysUserBo userBo = new SysUserBo();
         userBo.setStatus("0");
-        List<Long> userIds = userService.selectUserExportList(userBo).stream()
-            .map(SysUserExportVo::getUserId)
-            .toList();
+        List<Long> userIds = userService.selectUserIds(userBo);
         if (!userIds.isEmpty()) {
             SseMessageDto dto = new SseMessageDto();
             dto.setUserIds(userIds);
