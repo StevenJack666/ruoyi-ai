@@ -1,7 +1,7 @@
 package org.ruoyi.system.controller.system;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.ruoyi.common.core.domain.R;
 import org.ruoyi.common.core.service.DictService;
 import org.ruoyi.common.idempotent.annotation.RepeatSubmit;
@@ -9,13 +9,27 @@ import org.ruoyi.common.log.annotation.Log;
 import org.ruoyi.common.log.enums.BusinessType;
 import org.ruoyi.common.mybatis.core.page.PageQuery;
 import org.ruoyi.common.mybatis.core.page.TableDataInfo;
+import org.ruoyi.common.sse.dto.SseMessageDto;
 import org.ruoyi.common.sse.utils.SseMessageUtils;
 import org.ruoyi.common.web.core.BaseController;
 import org.ruoyi.system.domain.bo.SysNoticeBo;
+import org.ruoyi.system.domain.bo.SysUserBo;
 import org.ruoyi.system.domain.vo.SysNoticeVo;
+import org.ruoyi.system.domain.vo.SysUserExportVo;
 import org.ruoyi.system.service.ISysNoticeService;
+import org.ruoyi.system.service.ISysUserService;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import cn.dev33.satoken.annotation.SaCheckPermission;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 公告 信息操作处理
@@ -30,6 +44,7 @@ public class SysNoticeController extends BaseController {
 
     private final ISysNoticeService noticeService;
     private final DictService dictService;
+    private final ISysUserService userService;
 
     /**
      * 获取通知公告列表
@@ -64,7 +79,19 @@ public class SysNoticeController extends BaseController {
             return R.fail();
         }
         String type = dictService.getDictLabel("sys_notice_type", notice.getNoticeType());
-        SseMessageUtils.publishAll("[" + type + "] " + notice.getNoticeTitle());
+
+        // 公告消息按全量用户分发，确保离线用户也会落库为未读。
+        SysUserBo userBo = new SysUserBo();
+        userBo.setStatus("0");
+        List<Long> userIds = userService.selectUserExportList(userBo).stream()
+            .map(SysUserExportVo::getUserId)
+            .toList();
+        if (!userIds.isEmpty()) {
+            SseMessageDto dto = new SseMessageDto();
+            dto.setUserIds(userIds);
+            dto.setMessage("[" + type + "] " + notice.getNoticeTitle());
+            SseMessageUtils.publishMessage(dto);
+        }
         return R.ok();
     }
 

@@ -1,11 +1,12 @@
 package org.ruoyi.common.sse.utils;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.core.utils.SpringUtils;
 import org.ruoyi.common.sse.core.SseEmitterManager;
 import org.ruoyi.common.sse.dto.SseMessageDto;
+
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * SSE工具类
@@ -61,19 +62,6 @@ public class SseMessageUtils {
         }
         MANAGER.publishMessage(sseMessageDto);
     }
-
-    /**
-     * 向所有的用户发布订阅的消息(群发)
-     *
-     * @param message 要发布的消息内容
-     */
-    public static void publishAll(String message) {
-        if (!isEnable()) {
-            return;
-        }
-        MANAGER.publishAll(message);
-    }
-
 
     /**
      * 完成指定用户的SSE连接

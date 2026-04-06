@@ -8,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import org.ruoyi.common.bus.domain.BusMessageHistory;
 import org.ruoyi.common.bus.service.IBusMessageService;
 import org.ruoyi.common.core.utils.SpringUtils;
 import org.ruoyi.common.json.utils.JsonUtils;
@@ -86,7 +85,6 @@ public class SseEmitterManager {
         try {
             // 向客户端发送一条连接成功的事件
             emitter.send(SseEmitter.event().comment("connected"));
-            replayUnreadMessages(userId, emitter);
         } catch (IOException e) {
             // 如果发送消息失败，则从映射表中移除 emitter
             emitters.remove(token);
@@ -263,46 +261,6 @@ public class SseEmitterManager {
         dispatchMessage(broadcastMessage);
         log.info("SSE发送本地消息 session keys:{} message:{}",
             sseMessageDto.getUserIds(), sseMessageDto.getMessage());
-    }
-
-    /**
-     * 向所有的用户发布订阅的消息(群发)
-     *
-     * @param message 要发布的消息内容
-     */
-    public void publishAll(String message) {
-        SseMessageDto broadcastMessage = new SseMessageDto();
-        broadcastMessage.setMessageId(buildMessageId());
-        broadcastMessage.setSendTime(System.currentTimeMillis());
-        broadcastMessage.setMessage(message);
-        broadcastMessage.setUserIds(new ArrayList<>(USER_TOKEN_EMITTERS.keySet()));
-        dispatchMessage(broadcastMessage);
-        log.info("SSE发送本机群发消息 message:{} online users:{}",
-            message, broadcastMessage.getUserIds().size());
-    }
-
-    /**
-     * 读取 bus 未读并转换为 SSE 事件格式后回放给当前连接。
-     */
-    private void replayUnreadMessages(Long userId, SseEmitter emitter) {
-        List<BusMessageHistory> unreadMessages = busMessageService.listUnread(userId);
-        if (CollUtil.isEmpty(unreadMessages)) {
-            return;
-        }
-        unreadMessages.forEach(record -> {
-            try {
-                SseMessageDto message = new SseMessageDto();
-                message.setMessageId(record.getMessageId());
-                message.setMessage(record.getMessage());
-                message.setSendTime(record.getSendTime());
-                message.setUserIds(List.of(record.getUserId()));
-                emitter.send(SseEmitter.event()
-                    .name("message")
-                    .data(JsonUtils.toJsonString(message)));
-            } catch (Exception e) {
-                log.warn("回放离线消息失败 userId={} messageId={}", userId, record.getMessageId(), e);
-            }
-        });
     }
 
     private String buildMessageId() {
