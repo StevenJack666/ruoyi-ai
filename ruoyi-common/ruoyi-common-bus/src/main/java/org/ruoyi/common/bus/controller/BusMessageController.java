@@ -10,6 +10,7 @@ import org.ruoyi.common.satoken.utils.LoginHelper;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.List;
  */
 @RestController
 @RequiredArgsConstructor
+@RequestMapping("/bus/message")
 public class BusMessageController {
 
     private final IBusMessageService busMessageService;
@@ -26,7 +28,7 @@ public class BusMessageController {
     /**
      * 查询当前用户未读消息
      */
-    @GetMapping("/resource/message/unread")
+    @GetMapping("/unread")
     public R<List<BusMessageHistory>> unread() {
         Long userId = LoginHelper.getUserId();
         return R.ok(busMessageService.listUnread(userId));
@@ -35,7 +37,7 @@ public class BusMessageController {
     /**
      * 查询消息历史(包含已读)
      */
-    @GetMapping("/resource/message/history")
+    @GetMapping("/history")
     public TableDataInfo<BusMessageHistory> history(PageQuery pageQuery) {
         Long userId = LoginHelper.getUserId();
         return busMessageService.pageHistory(userId, pageQuery);
@@ -44,7 +46,7 @@ public class BusMessageController {
     /**
      * 消息已读回执(按消息ID)
      */
-    @PostMapping("/resource/message/ack")
+    @PostMapping("/ack")
     public R<Void> ack(@RequestBody List<String> messageIds) {
         Long userId = LoginHelper.getUserId();
         busMessageService.ackMessages(userId, messageIds);
@@ -54,7 +56,7 @@ public class BusMessageController {
     /**
      * 全部已读
      */
-    @PostMapping("/resource/message/ackAll")
+    @PostMapping("/ackAll")
     public R<Void> ackAll() {
         Long userId = LoginHelper.getUserId();
         busMessageService.ackAll(userId);
