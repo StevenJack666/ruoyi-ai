@@ -54,15 +54,6 @@
 
 | Module     | GitHub Repository                                             | Gitee Repository                                             | GitCode Repository                                             |
 |----------|-------------------------------------------------------|------------------------------------------------------|--------------------------------------------------------|
-| 🔧 Backend  | [ruoyi-ai](https://github.com/ageerle/ruoyi-ai)       | [ruoyi-ai](https://gitee.com/ageerle/ruoyi-ai)       | [ruoyi-ai](https://gitcode.com/ageerle/ruoyi-ai)       |
-| 🎨 User Frontend  | [ruoyi-web](https://github.com/ageerle/ruoyi-web)     | [ruoyi-web](https://gitee.com/ageerle/ruoyi-web)     | [ruoyi-web](https://gitcode.com/ageerle/ruoyi-web)     |
-| 🛠️ Admin Panel | [ruoyi-admin](https://github.com/ageerle/ruoyi-admin) | [ruoyi-admin](https://gitee.com/ageerle/ruoyi-admin) | [ruoyi-admin](https://gitcode.com/ageerle/ruoyi-admin) |
-
-### Partner Projects
-| Project Name           | GitHub Repository                                             | Gitee Repository
-|----------------|-------------------------------------------------------|------------------------------------------------------|
-| element-plus-x | [element-plus-x](https://github.com/element-plus-x/Element-Plus-X)       | [element-plus-x](https://gitee.com/he-jiayue/element-plus-x)       |
-
 ## 🛠️ Technical Architecture
 
 ### Core Framework
@@ -99,19 +90,8 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 ## 🙏 Acknowledgments
 
 Thanks to the following excellent open-source projects for their support:
-- [Spring AI Alibaba Copilot](https://github.com/spring-ai-alibaba/copilot) - Intelligent coding assistant based on spring-ai-alibaba
-- [Langchain4j](https://github.com/langchain4j/langchain4j) - Powerful Java LLM development framework
-- [RuoYi-Vue-Plus](https://gitee.com/dromara/RuoYi-Vue-Plus) - Mature enterprise-level rapid development framework
-- [Vben Admin](https://github.com/vbenjs/vue-vben-admin) - Modern Vue admin template
-
-## 🌐 Ecosystem Partners
-
-- [PPIO Cloud](https://ppinfra.com/user/register?invited_by=P8QTUY&utm_source=github_ruoyi-ai) - Provides cost-effective GPU computing and model API services
-- [Youyun Intelligent Computing](https://www.compshare.cn/?ytag=GPU_YY-gh_ruoyi) - Thousands of RTX40 series GPUs + mainstream models API services, second-level response, pay-per-use, free for new customers.
 
 ## Outstanding Open-Source Projects and Community Recommendations
-- [imaiwork](https://gitee.com/tsinghua-open/imaiwork) - Open-source AI phone, AI customer acquisition phone project, based on accessibility mode and RPA, more powerful than Doubao AI phone.
-
 ## 💬 Community Chat
 
 <div align="center">

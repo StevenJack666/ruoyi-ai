@@ -9,7 +9,6 @@
     <version>${revision}</version>
 
     <name>ruoyi-ai</name>
-    <url>>https://gitee.com/ageerle/ruoyi-ai</url>
     <description>全栈式AI开发平台</description>
 
     <properties>

@@ -214,7 +214,7 @@ springdoc:
     contact:
       name:  ageerle
       email: ageerle@163.com
-      url: https://gitee.com/ageerle/ruoyi-ai
+      url: https://test/ruoyi
 
 knife4j:
   # 是否启用 knife4j 文档增强（访问 /doc.html）

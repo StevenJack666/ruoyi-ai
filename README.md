@@ -53,14 +53,9 @@
 
 | 项目模块     | GitHub 仓库                                             | Gitee 仓库                                             | GitCode 仓库                                             |
 |----------|-------------------------------------------------------|------------------------------------------------------|--------------------------------------------------------|
-| 🔧 后端服务  | [ruoyi-ai](https://github.com/ageerle/ruoyi-ai)       | [ruoyi-ai](https://gitee.com/ageerle/ruoyi-ai)       | [ruoyi-ai](https://gitcode.com/ageerle/ruoyi-ai)       |
-| 🎨 用户前端  | [ruoyi-web](https://github.com/ageerle/ruoyi-web)     | [ruoyi-web](https://gitee.com/ageerle/ruoyi-web)     | [ruoyi-web](https://gitcode.com/ageerle/ruoyi-web)     |
-| 🛠️ 管理后台 | [ruoyi-admin](https://github.com/ageerle/ruoyi-admin) | [ruoyi-admin](https://gitee.com/ageerle/ruoyi-admin) | [ruoyi-admin](https://gitcode.com/ageerle/ruoyi-admin) |
-
 ### 合作项目
 | 项目名称           | GitHub 仓库                                             | Gitee 仓库                                             
 |----------------|-------------------------------------------------------|------------------------------------------------------|
-| element-plus-x | [element-plus-x](https://github.com/element-plus-x/Element-Plus-X)       | [element-plus-x](https://gitee.com/he-jiayue/element-plus-x)       | 
 
 ## 🛠️ 技术架构
 
@@ -97,23 +92,8 @@
 
 ## 🙏 特别鸣谢
 
-感谢以下优秀的开源项目为本项目提供支持：
-- [Spring AI Alibaba Copilot](https://github.com/spring-ai-alibaba/copilot) - 基于spring-ai-alibaba
-  的智能编码助手
-- [Langchain4j](https://github.com/langchain4j/langchain4j) - 强大的 Java LLM 开发框架
-- [RuoYi-Vue-Plus](https://gitee.com/dromara/RuoYi-Vue-Plus) - 成熟的企业级快速开发框架
-- [Vben Admin](https://github.com/vbenjs/vue-vben-admin) - 现代化的 Vue 后台管理模板
-
-## 🌐 生态伙伴
-
-- [PPIO 派欧云](https://ppinfra.com/user/register?invited_by=P8QTUY&utm_source=github_ruoyi-ai) - 提供高性价比的 GPU
-  算力和模型 API 服务
-- [优云智算](https://www.compshare.cn/?ytag=GPU_YY-gh_ruoyi) - 万卡RTX40系GPU+海内外主流模型API服务，秒级响应，按量计费，新客免费用。
 
 ## 优秀开源项目及社区推荐
-- [imaiwork](https://gitee.com/tsinghua-open/imaiwork) - AI手机开源版，AI获客手机项目，基于无障碍模式，RPA，比豆包AI手机更强大。
-
-## 💬 社区交流
 
 <div align="center">
 

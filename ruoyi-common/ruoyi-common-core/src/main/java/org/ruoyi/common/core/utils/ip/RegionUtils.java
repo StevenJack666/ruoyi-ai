@@ -9,7 +9,6 @@ import org.lionsoul.ip2region.xdb.Searcher;
 
 /**
  * 根据ip地址定位工具类，离线方式
- * 参考地址：<a href="https://gitee.com/lionsoul/ip2region/tree/master/binding/java">集成 ip2region 实现离线IP地址定位库</a>
  *
  * @author lishuyan
  */
