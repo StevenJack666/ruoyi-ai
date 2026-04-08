@@ -69,10 +69,24 @@ public class BusMessageServiceImpl implements IBusMessageService {
     }
 
     @Override
-    public TableDataInfo<BusMessageHistory> pageHistory(Long userId, PageQuery pageQuery) {
+    public void deleteHistory(Long userId, Integer readStatus) {
+        LambdaQueryWrapper<BusMessageHistory> queryWrapper = new LambdaQueryWrapper<BusMessageHistory>()
+            .eq(BusMessageHistory::getUserId, userId);
+        if (readStatus != null && (readStatus == 0 || readStatus == 1)) {
+            queryWrapper.eq(BusMessageHistory::getReadStatus, readStatus);
+        }
+        busMessageHistoryMapper.delete(queryWrapper);
+    }
+
+    @Override
+    public TableDataInfo<BusMessageHistory> pageHistory(Long userId, Integer readStatus, PageQuery pageQuery) {
+        LambdaQueryWrapper<BusMessageHistory> queryWrapper = new LambdaQueryWrapper<BusMessageHistory>()
+            .eq(BusMessageHistory::getUserId, userId);
+        if (readStatus != null && (readStatus == 0 || readStatus == 1)) {
+            queryWrapper.eq(BusMessageHistory::getReadStatus, readStatus);
+        }
         Page<BusMessageHistory> page = busMessageHistoryMapper.selectPage(pageQuery.build(),
-            new LambdaQueryWrapper<BusMessageHistory>()
-                .eq(BusMessageHistory::getUserId, userId)
+            queryWrapper
                 .orderByDesc(BusMessageHistory::getCreateTime)
                 .orderByDesc(BusMessageHistory::getId));
         return new TableDataInfo<>(page.getRecords(), page.getTotal());

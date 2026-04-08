@@ -1,6 +1,7 @@
 package org.ruoyi.common.bus.controller;
 
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.ruoyi.common.bus.domain.BusMessageHistory;
 import org.ruoyi.common.bus.service.IBusMessageService;
 import org.ruoyi.common.core.domain.R;
@@ -11,9 +12,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 消息中心控制器
@@ -35,12 +37,13 @@ public class BusMessageController {
     }
 
     /**
-     * 查询消息历史(包含已读)
+     * 查询消息历史
+     * readStatus: 0=未读 1=已读 不传=全部
      */
     @GetMapping("/history")
-    public TableDataInfo<BusMessageHistory> history(PageQuery pageQuery) {
+    public TableDataInfo<BusMessageHistory> history(@RequestParam(required = false) Integer readStatus, PageQuery pageQuery) {
         Long userId = LoginHelper.getUserId();
-        return busMessageService.pageHistory(userId, pageQuery);
+        return busMessageService.pageHistory(userId, readStatus, pageQuery);
     }
 
     /**
@@ -60,6 +63,17 @@ public class BusMessageController {
     public R<Void> ackAll() {
         Long userId = LoginHelper.getUserId();
         busMessageService.ackAll(userId);
+        return R.ok();
+    }
+
+    /**
+     * 删除消息历史
+     * readStatus: 0=删除未读 1=删除已读 不传=删除全部
+     */
+    @PostMapping("/delete")
+    public R<Void> delete(@RequestParam(required = false) Integer readStatus) {
+        Long userId = LoginHelper.getUserId();
+        busMessageService.deleteHistory(userId, readStatus);
         return R.ok();
     }
 }

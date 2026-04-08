@@ -19,5 +19,7 @@ public interface IBusMessageService {
 
     void ackAll(Long userId);
 
-    TableDataInfo<BusMessageHistory> pageHistory(Long userId, PageQuery pageQuery);
+    void deleteHistory(Long userId, Integer readStatus);
+
+    TableDataInfo<BusMessageHistory> pageHistory(Long userId, Integer readStatus, PageQuery pageQuery);
 }
