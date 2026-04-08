@@ -110,6 +110,12 @@
             <artifactId>ruoyi-aiflow</artifactId>
         </dependency>
 
+        <!--  Extend需求跟踪模块  -->
+        <dependency>
+            <groupId>org.ruoyi</groupId>
+            <artifactId>ruoyi-requirement-extend</artifactId>
+        </dependency>
+
 
         <dependency>
             <groupId>de.codecentric</groupId>

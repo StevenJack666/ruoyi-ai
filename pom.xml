@@ -396,6 +396,13 @@
                 <version>${revision}</version>
             </dependency>
 
+            <!--  Extend需求跟踪模块  -->
+            <dependency>
+                <groupId>org.ruoyi</groupId>
+                <artifactId>ruoyi-requirement-extend</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
             <!-- 企业微信SDK -->
             <dependency>
                 <groupId>com.github.binarywang</groupId>
