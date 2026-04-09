@@ -95,53 +95,53 @@ CREATE TABLE IF NOT EXISTS `req_ext_requirement_history` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='需求历史表';
 
 -- 字典类型初始化
-INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 2026040801, '需求状态', 'req_ext_status', '0', 103, 1, NOW(), '需求跟踪扩展模块', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_status' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 2026040801, '需求状态', 'req_ext_status', 103, 1, NOW(), '需求跟踪扩展模块', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_status' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 2026040802, '需求优先级', 'req_ext_priority', '0', 103, 1, NOW(), '需求跟踪扩展模块', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_priority' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 2026040802, '需求优先级', 'req_ext_priority', 103, 1, NOW(), '需求跟踪扩展模块', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_priority' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 2026040803, '需求类型', 'req_ext_type', '0', 103, 1, NOW(), '需求跟踪扩展模块', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_type' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 2026040803, '需求类型', 'req_ext_type', 103, 1, NOW(), '需求跟踪扩展模块', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_type' AND `tenant_id` = '000000');
 
 -- 字典数据初始化
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604080101, 1, '草稿', 'draft', 'req_ext_status', '0', 103, 1, NOW(), '需求状态', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_status' AND `dict_value` = 'draft' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604080101, 1, '草稿', 'draft', 'req_ext_status', '', 'default', 'N', 103, 1, NOW(), '需求状态', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_status' AND `dict_value` = 'draft' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604080102, 2, '待评审', 'reviewing', 'req_ext_status', '0', 103, 1, NOW(), '需求状态', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_status' AND `dict_value` = 'reviewing' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604080102, 2, '待评审', 'reviewing', 'req_ext_status', '', 'warning', 'N', 103, 1, NOW(), '需求状态', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_status' AND `dict_value` = 'reviewing' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604080103, 3, '进行中', 'in_progress', 'req_ext_status', '0', 103, 1, NOW(), '需求状态', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_status' AND `dict_value` = 'in_progress' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604080103, 3, '进行中', 'in_progress', 'req_ext_status', '', 'primary', 'N', 103, 1, NOW(), '需求状态', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_status' AND `dict_value` = 'in_progress' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604080104, 4, '已关闭', 'closed', 'req_ext_status', '0', 103, 1, NOW(), '需求状态', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_status' AND `dict_value` = 'closed' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604080104, 4, '已关闭', 'closed', 'req_ext_status', '', 'danger', 'N', 103, 1, NOW(), '需求状态', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_status' AND `dict_value` = 'closed' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604080201, 1, '低', 'low', 'req_ext_priority', '0', 103, 1, NOW(), '需求优先级', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_priority' AND `dict_value` = 'low' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604080201, 1, '低', 'low', 'req_ext_priority', '', 'default', 'N', 103, 1, NOW(), '需求优先级', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_priority' AND `dict_value` = 'low' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604080202, 2, '中', 'medium', 'req_ext_priority', '0', 103, 1, NOW(), '需求优先级', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_priority' AND `dict_value` = 'medium' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604080202, 2, '中', 'medium', 'req_ext_priority', '', 'warning', 'N', 103, 1, NOW(), '需求优先级', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_priority' AND `dict_value` = 'medium' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604080203, 3, '高', 'high', 'req_ext_priority', '0', 103, 1, NOW(), '需求优先级', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_priority' AND `dict_value` = 'high' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604080203, 3, '高', 'high', 'req_ext_priority', '', 'danger', 'N', 103, 1, NOW(), '需求优先级', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_priority' AND `dict_value` = 'high' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604080301, 1, '业务需求', 'business', 'req_ext_type', '0', 103, 1, NOW(), '需求类型', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_type' AND `dict_value` = 'business' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604080301, 1, '业务需求', 'business', 'req_ext_type', '', 'default', 'N', 103, 1, NOW(), '需求类型', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_type' AND `dict_value` = 'business' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604080302, 2, '技术需求', 'tech', 'req_ext_type', '0', 103, 1, NOW(), '需求类型', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_type' AND `dict_value` = 'tech' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604080302, 2, '技术需求', 'tech', 'req_ext_type', '', 'primary', 'N', 103, 1, NOW(), '需求类型', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_type' AND `dict_value` = 'tech' AND `tenant_id` = '000000');
 
 SET FOREIGN_KEY_CHECKS = 1;

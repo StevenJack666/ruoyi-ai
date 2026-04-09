@@ -34,65 +34,65 @@ CREATE TABLE IF NOT EXISTS `req_ext_project_bug` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='项目Bug表';
 
 -- 字典类型初始化
-INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 2026040810, 'Bug状态', 'req_ext_bug_status', '0', 103, 1, NOW(), '需求跟踪Bug扩展模块', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_bug_status' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 2026040810, 'Bug状态', 'req_ext_bug_status', 103, 1, NOW(), '需求跟踪Bug扩展模块', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_bug_status' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 2026040811, 'Bug严重程度', 'req_ext_bug_severity', '0', 103, 1, NOW(), '需求跟踪Bug扩展模块', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_bug_severity' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 2026040811, 'Bug严重程度', 'req_ext_bug_severity', 103, 1, NOW(), '需求跟踪Bug扩展模块', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_bug_severity' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 2026040812, 'Bug优先级', 'req_ext_bug_priority', '0', 103, 1, NOW(), '需求跟踪Bug扩展模块', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_bug_priority' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_type` (`dict_id`, `dict_name`, `dict_type`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 2026040812, 'Bug优先级', 'req_ext_bug_priority', 103, 1, NOW(), '需求跟踪Bug扩展模块', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_type` WHERE `dict_type` = 'req_ext_bug_priority' AND `tenant_id` = '000000');
 
 -- 字典数据初始化
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081001, 1, '待处理', 'open', 'req_ext_bug_status', '0', 103, 1, NOW(), 'Bug状态', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_status' AND `dict_value` = 'open' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081001, 1, '待处理', 'open', 'req_ext_bug_status', '', 'default', 'N', 103, 1, NOW(), 'Bug状态', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_status' AND `dict_value` = 'open' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081002, 2, '处理中', 'in_progress', 'req_ext_bug_status', '0', 103, 1, NOW(), 'Bug状态', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_status' AND `dict_value` = 'in_progress' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081002, 2, '处理中', 'in_progress', 'req_ext_bug_status', '', 'default', 'N', 103, 1, NOW(), 'Bug状态', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_status' AND `dict_value` = 'in_progress' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081003, 3, '已解决', 'resolved', 'req_ext_bug_status', '0', 103, 1, NOW(), 'Bug状态', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_status' AND `dict_value` = 'resolved' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081003, 3, '已解决', 'resolved', 'req_ext_bug_status', '', 'success', 'N', 103, 1, NOW(), 'Bug状态', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_status' AND `dict_value` = 'resolved' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081004, 4, '已关闭', 'closed', 'req_ext_bug_status', '0', 103, 1, NOW(), 'Bug状态', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_status' AND `dict_value` = 'closed' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081004, 4, '已关闭', 'closed', 'req_ext_bug_status', '', 'danger', 'N', 103, 1, NOW(), 'Bug状态', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_status' AND `dict_value` = 'closed' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081101, 1, '致命', 'critical', 'req_ext_bug_severity', '0', 103, 1, NOW(), 'Bug严重程度', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_severity' AND `dict_value` = 'critical' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081101, 1, '致命', 'critical', 'req_ext_bug_severity', '', 'danger', 'N', 103, 1, NOW(), 'Bug严重程度', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_severity' AND `dict_value` = 'critical' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081102, 2, '严重', 'major', 'req_ext_bug_severity', '0', 103, 1, NOW(), 'Bug严重程度', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_severity' AND `dict_value` = 'major' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081102, 2, '严重', 'major', 'req_ext_bug_severity', '', 'warning', 'N', 103, 1, NOW(), 'Bug严重程度', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_severity' AND `dict_value` = 'major' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081103, 3, '一般', 'normal', 'req_ext_bug_severity', '0', 103, 1, NOW(), 'Bug严重程度', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_severity' AND `dict_value` = 'normal' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081103, 3, '一般', 'normal', 'req_ext_bug_severity', '', 'default', 'N', 103, 1, NOW(), 'Bug严重程度', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_severity' AND `dict_value` = 'normal' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081104, 4, '轻微', 'minor', 'req_ext_bug_severity', '0', 103, 1, NOW(), 'Bug严重程度', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_severity' AND `dict_value` = 'minor' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081104, 4, '轻微', 'minor', 'req_ext_bug_severity', '', 'info', 'N', 103, 1, NOW(), 'Bug严重程度', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_severity' AND `dict_value` = 'minor' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081201, 1, '低', 'low', 'req_ext_bug_priority', '0', 103, 1, NOW(), 'Bug优先级', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_priority' AND `dict_value` = 'low' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081201, 1, '低', 'low', 'req_ext_bug_priority', '', 'default', 'N', 103, 1, NOW(), 'Bug优先级', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_priority' AND `dict_value` = 'low' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081202, 2, '中', 'medium', 'req_ext_bug_priority', '0', 103, 1, NOW(), 'Bug优先级', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_priority' AND `dict_value` = 'medium' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081202, 2, '中', 'medium', 'req_ext_bug_priority', '', 'warning', 'N', 103, 1, NOW(), 'Bug优先级', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_priority' AND `dict_value` = 'medium' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081203, 3, '高', 'high', 'req_ext_bug_priority', '0', 103, 1, NOW(), 'Bug优先级', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_priority' AND `dict_value` = 'high' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081203, 3, '高', 'high', 'req_ext_bug_priority', '', 'danger', 'N', 103, 1, NOW(), 'Bug优先级', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_priority' AND `dict_value` = 'high' AND `tenant_id` = '000000');
 
-INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `status`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
-SELECT 202604081204, 4, '紧急', 'urgent', 'req_ext_bug_priority', '0', 103, 1, NOW(), 'Bug优先级', 0
-WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_priority' AND `dict_value` = 'urgent' AND `tenant_id` = 0);
+INSERT INTO `sys_dict_data` (`dict_code`, `dict_sort`, `dict_label`, `dict_value`, `dict_type`, `css_class`, `list_class`, `is_default`, `create_dept`, `create_by`, `create_time`, `remark`, `tenant_id`)
+SELECT 202604081204, 4, '紧急', 'urgent', 'req_ext_bug_priority', '', 'danger', 'N', 103, 1, NOW(), 'Bug优先级', '000000'
+WHERE NOT EXISTS (SELECT 1 FROM `sys_dict_data` WHERE `dict_type` = 'req_ext_bug_priority' AND `dict_value` = 'urgent' AND `tenant_id` = '000000');
 
 SET FOREIGN_KEY_CHECKS = 1;
