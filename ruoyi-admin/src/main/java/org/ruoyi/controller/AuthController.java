@@ -81,8 +81,6 @@ public class AuthController {
         String clientId = loginBody.getClientId();
         String grantType = loginBody.getGrantType();
 
-        //todo 临时方案
-        grantType = "password";
         SysClientVo client = clientService.queryByClientId(clientId);
         // 查询不到 client 或 client 内不包含 grantType
         if (ObjectUtil.isNull(client) || !StringUtils.contains(client.getGrantType(), grantType)) {
