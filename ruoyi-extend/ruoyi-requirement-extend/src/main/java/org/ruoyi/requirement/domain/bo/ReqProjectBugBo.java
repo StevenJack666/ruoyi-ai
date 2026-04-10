@@ -49,5 +49,7 @@ public class ReqProjectBugBo extends BaseEntity {
 
     private String actualResult;
 
+    private String screenshotUrls;
+
     private Date resolvedTime;
 }

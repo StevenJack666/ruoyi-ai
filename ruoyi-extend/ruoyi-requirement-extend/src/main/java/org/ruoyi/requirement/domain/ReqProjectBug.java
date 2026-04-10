@@ -49,6 +49,8 @@ public class ReqProjectBug extends TenantEntity {
 
     private String actualResult;
 
+    private String screenshotUrls;
+
     private Date resolvedTime;
 
     @TableLogic

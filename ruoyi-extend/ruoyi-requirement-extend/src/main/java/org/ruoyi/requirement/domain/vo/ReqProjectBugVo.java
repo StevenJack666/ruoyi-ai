@@ -61,6 +61,9 @@ public class ReqProjectBugVo implements Serializable {
     @ExcelProperty(value = "实际结果")
     private String actualResult;
 
+    @ExcelProperty(value = "截图地址")
+    private String screenshotUrls;
+
     @ExcelProperty(value = "解决时间")
     private Date resolvedTime;
 }

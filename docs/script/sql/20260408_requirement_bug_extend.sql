@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS `req_ext_project_bug` (
     `reproduce_steps` text COMMENT '复现步骤',
     `expected_result` text COMMENT '预期结果',
     `actual_result` text COMMENT '实际结果',
+    `screenshot_urls` text COMMENT '截图地址(多个逗号分隔)',
     `resolved_time` datetime DEFAULT NULL COMMENT '解决时间',
     `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
     `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
