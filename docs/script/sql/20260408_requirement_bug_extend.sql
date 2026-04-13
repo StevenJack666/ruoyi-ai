@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS `req_ext_project_bug` (
     `assignee_id` bigint DEFAULT NULL COMMENT '指派人',
     `found_version` varchar(64) DEFAULT NULL COMMENT '发现版本',
     `fixed_version` varchar(64) DEFAULT NULL COMMENT '修复版本',
-    `reproduce_steps` text COMMENT '复现步骤',
+    `reproduce_steps` longtext DEFAULT NULL COMMENT '复现步骤(纯文本)',
     `expected_result` text COMMENT '预期结果',
     `actual_result` text COMMENT '实际结果',
     `screenshot_urls` text COMMENT '截图地址(多个逗号分隔)',

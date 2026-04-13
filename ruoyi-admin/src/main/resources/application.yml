@@ -241,8 +241,12 @@ xss:
   enabled: true
   # 排除链接
   excludeUrls:
+    - /requirement/bug
+    - /requirement/bug/**
     - /system/notice
     - /system/config
+    - /requirement/note
+    - /requirement/note/**
 
 --- # 分布式锁 lock4j 全局配置
 lock4j:
