@@ -1,6 +1,7 @@
 package org.ruoyi.requirement.controller;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.ruoyi.common.core.domain.R;
 import org.ruoyi.common.core.validate.AddGroup;
@@ -11,6 +12,7 @@ import org.ruoyi.common.log.annotation.Log;
 import org.ruoyi.common.log.enums.BusinessType;
 import org.ruoyi.common.mybatis.core.page.PageQuery;
 import org.ruoyi.common.mybatis.core.page.TableDataInfo;
+import org.ruoyi.common.satoken.utils.LoginHelper;
 import org.ruoyi.common.web.core.BaseController;
 import org.ruoyi.requirement.domain.bo.ReqProjectBugBo;
 import org.ruoyi.requirement.domain.bo.ReqProjectBugStatusBo;
@@ -67,6 +69,8 @@ public class ReqProjectBugController extends BaseController {
     @RepeatSubmit()
     @PostMapping
     public R<Void> add(@Validated(AddGroup.class) @RequestBody ReqProjectBugBo bo) {
+        bo.setOwnerId(LoginHelper.getUserId());
+        bo.setBugCode(String.valueOf(UUID.randomUUID()));
         return toAjax(bugService.insertByBo(bo));
     }
 

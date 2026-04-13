@@ -1,17 +1,5 @@
 package org.ruoyi.common.security.config;
 
-import cn.dev33.satoken.exception.NotLoginException;
-import cn.dev33.satoken.filter.SaServletFilter;
-import cn.dev33.satoken.httpauth.basic.SaHttpBasicUtil;
-import cn.dev33.satoken.interceptor.SaInterceptor;
-import cn.dev33.satoken.router.SaRouter;
-import cn.dev33.satoken.stp.StpUtil;
-import cn.dev33.satoken.util.SaResult;
-import cn.dev33.satoken.util.SaTokenConsts;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.core.constant.HttpStatus;
 import org.ruoyi.common.core.utils.ServletUtils;
 import org.ruoyi.common.core.utils.SpringUtils;
@@ -25,6 +13,20 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import cn.dev33.satoken.exception.NotLoginException;
+import cn.dev33.satoken.filter.SaServletFilter;
+import cn.dev33.satoken.httpauth.basic.SaHttpBasicUtil;
+import cn.dev33.satoken.interceptor.SaInterceptor;
+import cn.dev33.satoken.router.SaRouter;
+import cn.dev33.satoken.stp.StpUtil;
+import cn.dev33.satoken.util.SaResult;
+import cn.dev33.satoken.util.SaTokenConsts;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 权限安全配置
@@ -49,6 +51,11 @@ public class SecurityConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         // 注册路由拦截器，自定义验证规则
         registry.addInterceptor(new SaInterceptor(handler -> {
+                // SSE 等场景会触发异步二次分发，避免在 ASYNC 线程重复进行 Sa-Token 路由匹配
+                HttpServletRequest request = ServletUtils.getRequest();
+                if (request == null || request.getDispatcherType() != DispatcherType.REQUEST) {
+                    return;
+                }
                 AllUrlHandler allUrlHandler = SpringUtils.getBean(AllUrlHandler.class);
                 // 登录验证 -- 排除多个路径
                 SaRouter
@@ -56,7 +63,6 @@ public class SecurityConfig implements WebMvcConfigurer {
                     .match(allUrlHandler.getUrls())
                     // 对未排除的路径进行检查
                     .check(() -> {
-                        HttpServletRequest request = ServletUtils.getRequest();
                         HttpServletResponse response = ServletUtils.getResponse();
                         response.setContentType(SaTokenConsts.CONTENT_TYPE_APPLICATION_JSON);
                         // 检查是否登录 是否有token
@@ -83,7 +89,8 @@ public class SecurityConfig implements WebMvcConfigurer {
             })).addPathPatterns("/**")
             // 排除不需要拦截的路径
             .excludePathPatterns(securityProperties.getExcludes())
-            .excludePathPatterns(ssePath);
+                .excludePathPatterns(ssePath)
+                .excludePathPatterns(ssePath + "/**");
     }
 
     /**

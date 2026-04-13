@@ -27,7 +27,7 @@ public class SseMessageUtils {
     }
 
     /**
-     * 向指定的SSE会话发送消息
+     * 向指定的SSE会话发送消息，发送消息不会持久化，适用于在线用户的实时消息推送
      *
      * @param userId  要发送消息的用户id
      * @param message 要发送的消息内容
@@ -41,7 +41,7 @@ public class SseMessageUtils {
 
 
     /**
-     * 发布SSE订阅消息
+     * 发布SSE订阅消息,发送消息会持久化，可以离线加载
      *
      * @param sseMessageDto 要发布的SSE消息对象
      */

@@ -162,8 +162,6 @@ public class SseEmitterManager {
      * @param message 要发送的消息内容
      */
     public void sendMessage(Long userId, String message) {
-        String messageId = buildMessageId();
-        busMessageService.saveMessage(userId, messageId, message);
         sendTextMessage(userId, message);
     }
 
