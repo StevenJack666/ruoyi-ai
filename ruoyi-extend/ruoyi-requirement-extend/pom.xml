@@ -60,5 +60,9 @@
             <groupId>org.ruoyi</groupId>
             <artifactId>ruoyi-common-security</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.ruoyi</groupId>
+            <artifactId>ruoyi-common-mybatis</artifactId>
+        </dependency>
     </dependencies>
 </project>

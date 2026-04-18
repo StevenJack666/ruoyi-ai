@@ -5,7 +5,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 import org.ruoyi.requirement.domain.ReqProjectBug;
-
+import org.ruoyi.common.mybatis.core.domain.BaseEntity;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
 import io.github.linpeilie.annotations.AutoMapper;
@@ -14,7 +14,7 @@ import lombok.Data;
 @Data
 @ExcelIgnoreUnannotated
 @AutoMapper(target = ReqProjectBug.class)
-public class ReqProjectBugVo implements Serializable {
+public class ReqProjectBugVo extends BaseEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;

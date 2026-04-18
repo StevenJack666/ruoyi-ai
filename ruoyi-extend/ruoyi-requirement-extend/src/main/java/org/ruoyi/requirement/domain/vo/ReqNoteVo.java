@@ -4,7 +4,7 @@ import java.io.Serial;
 import java.io.Serializable;
 
 import org.ruoyi.requirement.domain.ReqNote;
-
+import org.ruoyi.common.mybatis.core.domain.BaseEntity;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
 import io.github.linpeilie.annotations.AutoMapper;
@@ -13,7 +13,7 @@ import lombok.Data;
 @Data
 @ExcelIgnoreUnannotated
 @AutoMapper(target = ReqNote.class)
-public class ReqNoteVo implements Serializable {
+public class ReqNoteVo extends BaseEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;

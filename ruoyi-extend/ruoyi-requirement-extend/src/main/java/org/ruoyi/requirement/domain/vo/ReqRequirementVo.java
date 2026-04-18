@@ -5,15 +5,14 @@ import cn.idev.excel.annotation.ExcelProperty;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 import org.ruoyi.requirement.domain.ReqRequirement;
-
+import org.ruoyi.common.mybatis.core.domain.BaseEntity;
 import java.io.Serial;
-import java.io.Serializable;
 import java.util.Date;
 
 @Data
 @ExcelIgnoreUnannotated
 @AutoMapper(target = ReqRequirement.class)
-public class ReqRequirementVo implements Serializable {
+public class ReqRequirementVo extends BaseEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;
