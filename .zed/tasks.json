@@ -1,0 +1,7 @@
+[
+  {
+    "label": "Run RuoYiAIApplication",
+    "command": "mvn -pl ruoyi-admin compile exec:java -Dexec.mainClass=org.ruoyi.RuoYiAIApplication",
+    "use_new_terminal": false
+  }
+]
