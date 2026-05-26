@@ -169,3 +169,16 @@
 [license-shield]: https://img.shields.io/github/license/ageerle/ruoyi-ai.svg?style=flat-square
 
 [license-url]: https://github.com/ageerle/ruoyi-ai/blob/main/LICENSE
+
+
+
+```bash
+docker run -d --name ruoyi-admin \
+  -p 9090:8080 \
+  -p 29090:28080 \
+  -m 1g \                                    # 限制容器 1G 内存
+  -e JAVA_OPTS="-Xms256m -Xmx512m" \          # JVM 堆 256-512M
+  -v /Users/zhangmingming/data/coder/LLM/0526/ruoyi-ai/ruoyi-admin/src/main/resources/application-dev.yml:/config/application-dev.yml \
+  -e SPRING_PROFILES_ACTIVE=dev \
+  -e SPRING_CONFIG_ADDITIONAL_LOCATION=file:/config/ \
+  ruoyi-admin:latest
