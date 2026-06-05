@@ -64,23 +64,11 @@ public class SseEmitterManager {
         emitters.put(token, emitter);
 
         // 当 emitter 完成、超时或发生错误时，从映射表中移除对应的 token
-        emitter.onCompletion(() -> {
-            SseEmitter remove = emitters.remove(token);
-            if (remove != null) {
-               remove.complete();
-            }
-        });
-        emitter.onTimeout(() -> {
-            SseEmitter remove = emitters.remove(token);
-            if (remove != null) {
-                remove.complete();
-            }
-        });
+        emitter.onCompletion(() -> removeEmitter(userId, token));
+        emitter.onTimeout(() -> removeEmitter(userId, token));
         emitter.onError((e) -> {
-            SseEmitter remove = emitters.remove(token);
-            if (remove != null) {
-                remove.complete();
-            }
+            log.error("SSE连接异常，准备移除连接 userId: {} token: {}", userId, token, e);
+            removeEmitter(userId, token);
         });
 
         try {
@@ -88,7 +76,7 @@ public class SseEmitterManager {
             emitter.send(SseEmitter.event().comment("connected"));
         } catch (IOException e) {
             // 如果发送消息失败，则从映射表中移除 emitter
-            emitters.remove(token);
+            removeEmitter(userId, token);
         }
         return emitter;
     }
@@ -105,14 +93,19 @@ public class SseEmitterManager {
         }
         Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.get(userId);
         if (MapUtil.isNotEmpty(emitters)) {
-            try {
-                SseEmitter sseEmitter = emitters.get(token);
-                sseEmitter.send(SseEmitter.event().comment("disconnected"));
-                //sseEmitter.complete();
-            } catch (Exception exception) {
-                log.error(exception.getMessage());
+            SseEmitter sseEmitter = emitters.get(token);
+            if (sseEmitter != null) {
+                try {
+                    sseEmitter.send(SseEmitter.event().comment("disconnected"));
+                } catch (Exception exception) {
+                    log.error("SSE disconnect send error userId: {} token: {}", userId, token, exception.getMessage(), exception);
+                } finally {
+                    removeEmitter(userId, token);
+                    safeComplete(sseEmitter);
+                }
+            } else {
+                removeEmitter(userId, token);
             }
-            emitters.remove(token);
         } else {
             USER_TOKEN_EMITTERS.remove(userId);
         }
@@ -212,7 +205,7 @@ public class SseEmitterManager {
                     log.error("【SSE发送失败】userId: {}, token: {}, error: {}", userId, entry.getKey(), e.getMessage());
                     SseEmitter remove = emitters.remove(entry.getKey());
                     if (remove != null) {
-                        remove.complete();
+                        safeComplete(remove);
                     }
                 }
             }
@@ -222,6 +215,29 @@ public class SseEmitterManager {
         }
     }
 
+    private void removeEmitter(Long userId, String token) {
+        if (userId == null || token == null) {
+            return;
+        }
+        Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.get(userId);
+        if (MapUtil.isNotEmpty(emitters)) {
+            emitters.remove(token);
+            if (emitters.isEmpty()) {
+                USER_TOKEN_EMITTERS.remove(userId);
+            }
+        }
+    }
+
+    private void safeComplete(SseEmitter emitter) {
+        if (emitter == null) {
+            return;
+        }
+        try {
+            emitter.complete();
+        } catch (Exception ignore) {
+            // ignore already closed or unusable response
+        }
+    }
 
     /**
      * 本机全用户会话发送消息
