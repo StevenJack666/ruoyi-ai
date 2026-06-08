@@ -1,7 +1,10 @@
 package org.ruoyi.service.chat.impl.provider;
 
 
+import dev.langchain4j.http.client.jdk.JdkHttpClient;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +59,7 @@ public class OpenAIServiceImpl implements AbstractChatService {
                     .timeout(Duration.ofSeconds(120))
                     .listeners(List.of(new MyChatModelListener()))
                     .returnThinking(chatRequest.getEnableThinking())
+                    .httpClientBuilder(JdkHttpClient.builder().httpClientBuilder(buildInsecureHttpClientBuilder()))
                     .build();
             log.info("OpenAI 兼容模型构建成功");
             return model;
@@ -63,6 +67,17 @@ public class OpenAIServiceImpl implements AbstractChatService {
             log.error("构建 OpenAI 兼容模型失败", e);
             throw new RuntimeException("无法构建模型: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public ChatModel buildChatModel(ChatModelVo chatModelVo) {
+        return OpenAiChatModel.builder()
+            .baseUrl(chatModelVo.getApiHost())
+            .apiKey(chatModelVo.getApiKey())
+            .modelName(chatModelVo.getModelName())
+            .timeout(Duration.ofSeconds(120))
+            .httpClientBuilder(JdkHttpClient.builder().httpClientBuilder(buildInsecureHttpClientBuilder()))
+            .build();
     }
 
     @Override
@@ -99,6 +114,7 @@ public class OpenAIServiceImpl implements AbstractChatService {
                     .sslContext(sslContext)
                     .sslParameters(sslParameters);
         } catch (Exception e) {
+            log.error("创建不安全 HttpClientBuilder 失败", e);
             throw new RuntimeException("无法创建不安全 HttpClientBuilder", e);
         }
     }
