@@ -1,0 +1,29 @@
+1. 第一步：上传（文件存入服务器）
+当你在前端选择文件并点击上传时，首先调用的是 **`backend/open_webui/routers/files.py`** 中的接口：
+*   **接口**：`POST /files/`
+*   **功能**：这个接口负责接收原始的二进制文件，生成一个 `file_id`，并将文件保存到服务器的 `UPLOAD_DIR`（或者是你配置的 S3 存储）。此时，文件只是被存下来了，还没有被解析成文字。
+
+### 2. 第二步：处理（你看到的这个接口）
+你提到的 `process_files_batch`（或单个文件的 `process_file`）是在文件**上传成功后**被调用的。
+*   **接口**：`POST /process/files/batch` 或 `POST /process/file`
+*   **功能**：
+    *   **触发时机**：通常在上传完成后，前端会立即拿着返回的 `file_id` 来调用这个处理接口。
+    *   **核心逻辑**：这个接口才是真正执行**多模态解析**的地方。它会调用我们之前看到的 `Loader`，把 PDF/图片变成文本，然后进行分段（Chunking）、向量化（Embedding），并存入向量数据库（如 ChromaDB）。
+
+### 为什么分两步？
+1.  **异步处理**：解析大文件或进行 OCR 非常耗时。分步可以让用户先看到“上传成功”，解析过程在后台慢慢跑。
+2.  **状态反馈**：前端可以根据 `file_id` 轮询文件的处理状态（如“处理中”、“已完成”）。
+3.  **重用文件**：文件上传一次后，可以被多次“处理”到不同的知识库（Collection）中，而不需要重复上传原始文件。
+
+### 总结
+*   **上传**：调用 `backend/open_webui/routers/files.py`。
+*   **解析/多模态/RAG**：调用你看到的 `backend/open_webui/routers/retrieval.py` 中的 `process_file` 或 `process_files_batch`。
+
+为了支撑上述流程，Open WebUI 维护了以下几张关键表：
+
+| 表名 | 作用 | 核心字段 |
+| :--- | :--- | :--- |
+| **`file`** | 存储所有上传文件的元数据 | `id`, `user_id`, `filename`, `path`, `meta` |
+| **`knowledge`** | 存储知识库目录（文件夹） | `id`, `name`, `description`, `user_id` |
+| **`knowledge_file`** | 关联表，记录哪些文件属于哪个知识库 | `knowledge_id`, `file_id` |
+| **`vector_db`** | (通常是外部库) 存储切片后的向量数据 | `id`, `embedding`, `document`, `metadata(file_id)
