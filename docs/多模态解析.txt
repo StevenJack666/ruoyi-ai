@@ -27,3 +27,17 @@
 | **`knowledge`** | 存储知识库目录（文件夹） | `id`, `name`, `description`, `user_id` |
 | **`knowledge_file`** | 关联表，记录哪些文件属于哪个知识库 | `knowledge_id`, `file_id` |
 | **`vector_db`** | (通常是外部库) 存储切片后的向量数据 | `id`, `embedding`, `document`, `metadata(file_id)
+
+
+可以使用langchain4j的
+
+目前后端多模态文档解析能力已经基本实现：KnowledgeFragmentMapper.searchByKeyword` 里写好了，非常干净。接下来就是**把它包装成一个 VectorStore 策略**，让现有检索管线零改动接入： 新建 `MysqlVectorStoreStrategy。2. 在工厂注册
+
+`VectorStoreStrategyFactory` 加一行：strategies.put("mysql", mysqlStrategy);
+配置切换：vector-store:
+  type: mysql
+
+
+后面文档解析，先检索通用知识库，然后再检索mysql本次会话用户上传的文档
+
+ 

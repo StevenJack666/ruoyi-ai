@@ -9,7 +9,10 @@ import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.service.chat.impl.ChatServiceFacade;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import org.ruoyi.common.core.domain.R;
 
 
 /**
@@ -26,6 +29,19 @@ public class ChatController {
 
     private final ChatServiceFacade chatService;
 
+    /**
+     * 会话文档上传（仅本次对话有效，Redis缓存，30分钟过期）
+     */
+    @PostMapping("/upload")
+    @ResponseBody
+    public R<Void> uploadSessionFile(@RequestParam MultipartFile file,
+                                      @RequestParam Long sessionId) {
+        // 具体逻辑委托给 service 层
+        chatService.    Long userId = LoginHelper.getUserId();;
+        return R.ok("");
+    }
+
+    
     /**
      * 聊天接口
      */
