@@ -54,24 +54,19 @@ public class MyMcpClientListener implements McpClientListener {
     // ==================== 工具执行 ====================
     @Override
     public void beforeExecuteTool(McpCallContext context) {
-        McpClientRequest message = (McpClientRequest) context.message();
-        McpClientParams params = message.getParams();
-        if (params instanceof McpCallToolParams callToolParams) {
-            String name = callToolParams.getName();
-            log.info("工具调用之前：{}",name);
+        if (context.message() instanceof McpCallToolRequest request) {
+            String name = (String) request.getParams().get("name");
+            log.info("工具调用之前：{}", name);
             pushMcpEvent(name, "pending", null);
         }
-
     }
 
     @Override
     public void afterExecuteTool(McpCallContext context, ToolExecutionResult result, Map<String, Object> rawResult) {
-        McpClientRequest message = (McpClientRequest) context.message();
-        McpClientParams params = message.getParams();
-        if (params instanceof McpCallToolParams callToolParams) {
-            String name = callToolParams.getName();
+        if (context.message() instanceof McpCallToolRequest request) {
+            String name = (String) request.getParams().get("name");
             String resultText = result != null ? result.toString() : "";
-            log.info("工具调用之后：{},返回结果{}",name,result);
+            log.info("工具调用之后：{},返回结果{}", name, result);
             pushMcpEvent(name, "success", truncate(resultText, 500));
         }
     }
