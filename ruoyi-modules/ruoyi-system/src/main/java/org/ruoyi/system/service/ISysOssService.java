@@ -2,9 +2,9 @@ package org.ruoyi.system.service;
 
 import org.ruoyi.common.mybatis.core.page.PageQuery;
 import org.ruoyi.common.mybatis.core.page.TableDataInfo;
-import org.ruoyi.system.domain.bo.SysOssBo;
-import org.ruoyi.system.domain.vo.SysOssUploadVo;
-import org.ruoyi.system.domain.vo.SysOssVo;
+import org.ruoyi.common.oss.domain.bo.SysOssBo;
+import org.ruoyi.common.oss.domain.vo.SysOssUploadVo;
+import org.ruoyi.common.oss.domain.vo.SysOssVo;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
 

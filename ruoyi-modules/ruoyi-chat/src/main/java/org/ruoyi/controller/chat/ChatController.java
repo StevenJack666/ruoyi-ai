@@ -38,12 +38,12 @@ public class ChatController {
     @Operation(summary = "上传会话文档", description = "上传文档到指定会话，文档缓存30分钟后自动过期")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseBody
-    public R<Void> uploadSessionFile(
+    public R<Long> uploadSessionFile(
             @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile file,
-            @Parameter(description = "会话ID", required = true) @RequestParam Long sessionId) {
+            @Parameter(description = "会话ID", required = true) @RequestParam Long sessionId,
+            @Parameter(description = "上传模式", required = false) @RequestParam(required = false) String providerCode) {
         // TODO: 具体逻辑委托给 service 层
-       chatService.attachSessionFile(file, sessionId);
-        return R.ok("");
+        return R.ok(chatService.attachSessionFile(file, sessionId, providerCode));
     }
 
 

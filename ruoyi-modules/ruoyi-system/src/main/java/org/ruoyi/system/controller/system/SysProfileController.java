@@ -18,7 +18,7 @@ import org.ruoyi.system.domain.bo.SysUserBo;
 import org.ruoyi.system.domain.bo.SysUserPasswordBo;
 import org.ruoyi.system.domain.bo.SysUserProfileBo;
 import org.ruoyi.system.domain.vo.ProfileUserVo;
-import org.ruoyi.system.domain.vo.SysOssVo;
+import org.ruoyi.common.oss.domain.vo.SysOssVo;
 import org.ruoyi.system.domain.vo.SysUserVo;
 import org.ruoyi.system.service.ISysOssService;
 import org.ruoyi.system.service.ISysUserService;

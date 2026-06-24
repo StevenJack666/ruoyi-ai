@@ -1,4 +1,4 @@
-package org.ruoyi.system.domain;
+package org.ruoyi.common.oss.domain;
 
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;

@@ -1,8 +1,8 @@
-package org.ruoyi.system.domain.vo;
+package org.ruoyi.common.oss.domain.vo;
 
+import org.ruoyi.common.oss.domain.SysOss;
 import org.ruoyi.common.translation.annotation.Translation;
 import org.ruoyi.common.translation.constant.TransConstant;
-import org.ruoyi.system.domain.SysOss;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
 

@@ -14,8 +14,9 @@ public interface IChatService {
     * todo 会话级别文件上传
     * @param file
     * @param sessionId
+    * @param providerCode
  */
-    void attachSessionFile(MultipartFile file, Long sessionId);
+    Long attachSessionFile(MultipartFile file, Long sessionId, String providerCode);
 
     /**
      * 客户端发送对话消息到服务端

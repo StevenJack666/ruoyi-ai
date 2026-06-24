@@ -1,4 +1,4 @@
-package org.ruoyi.system.domain.vo;
+package org.ruoyi.common.oss.domain.vo;
 
 import lombok.Data;
 
@@ -24,5 +24,10 @@ public class SysOssUploadVo {
      * 对象存储主键
      */
     private String ossId;
+
+    /**
+     * 文件路径地址
+     */
+    private String filePath;
 
 }
