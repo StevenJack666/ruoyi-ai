@@ -117,7 +117,7 @@ public class ChatMessageServiceImpl implements IChatMessageService {
                 .map(uploadRecord -> {                     // 转换并组装 VO
                     FileInfoVo vo = new FileInfoVo();
                     vo.setName(uploadRecord.getFileName());
-                    vo.setFileType(MimeTypeUtils.getMimeType(uploadRecord.getFileType()));
+                    vo.setType(MimeTypeUtils.getMimeType(uploadRecord.getFileType()));
                     vo.setFileSize(String.valueOf(uploadRecord.getFileSize()));
                     vo.setUrl(uploadRecord.getOssUrl());
                     return vo;

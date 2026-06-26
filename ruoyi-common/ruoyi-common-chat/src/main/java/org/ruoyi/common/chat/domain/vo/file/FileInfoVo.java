@@ -24,7 +24,7 @@ public class FileInfoVo {
      * 文件类型
      */
     @ExcelIgnore
-    private String fileType;
+    private String type;
 
     /**
      * 文件地址
