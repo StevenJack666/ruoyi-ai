@@ -53,7 +53,7 @@ user:
 spring:
   application:
     name: ruoyi-ai
-  # ⚠️ 禁用 Spring Boot 的 Neo4j 自动配置
+  # 禁用 Spring Boot 的 Neo4j 自动配置
   # 默认情况下，如果类路径上存在 neo4j-java-driver，Spring Boot 会尝试自动配置
   # 这会导致应用在启动时尝试连接到 Neo4j，即使我们没有需要它
   autoconfigure:
