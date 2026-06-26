@@ -1,13 +1,16 @@
 package org.ruoyi.common.chat.domain.vo.chat;
 
+import cn.idev.excel.annotation.ExcelIgnore;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
+import org.ruoyi.common.chat.domain.vo.file.FileInfoVo;
 import org.ruoyi.common.chat.entity.chat.ChatMessage;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.List;
 
 
 /**
@@ -73,5 +76,9 @@ public class ChatMessageVo implements Serializable {
     @ExcelProperty(value = "备注")
     private String remark;
 
+    /**
+     * 文件列表
+     */
+    private List<FileInfoVo> fileList;
 
 }

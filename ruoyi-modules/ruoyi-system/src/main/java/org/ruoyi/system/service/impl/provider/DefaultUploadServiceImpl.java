@@ -11,6 +11,8 @@ import org.ruoyi.common.oss.domain.vo.UploadVo;
 import org.ruoyi.common.oss.enums.UploadModeType;
 import org.ruoyi.common.oss.service.IUploadService;
 import org.ruoyi.system.mapper.SysOssMapper;
+import org.ruoyi.system.service.ISysConfigService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,9 +34,8 @@ import java.util.UUID;
 @Service
 public class DefaultUploadServiceImpl implements IUploadService {
 
-    // 上传文件服务器地址
-    @Value("${sys.upload.path}")
-    private String UPLOAD_PATH;
+    @Autowired
+    private ISysConfigService sysConfigService;
 
     @Resource
     private SysOssMapper baseMapper;
@@ -50,7 +51,11 @@ public class DefaultUploadServiceImpl implements IUploadService {
             String suffix = lastDotIndex > 0 ? originalName.substring(lastDotIndex + 1) : "";
             try {
                 // 确保上传目录存在
-                Path uploadDir = Paths.get(UPLOAD_PATH);
+                String upLoadPath = initUploadPath();
+                if (StringUtils.isEmpty(upLoadPath)){
+                    throw new ServiceException("上传路径配置不能为空！");
+                }
+                Path uploadDir = Paths.get(upLoadPath);
                 if (!Files.exists(uploadDir)) {
                     Files.createDirectories(uploadDir);
                 }
@@ -94,6 +99,15 @@ public class DefaultUploadServiceImpl implements IUploadService {
         uploadVo.setOssId(oss.getOssId().toString());
         uploadVo.setFilePath(filePath);
         return uploadVo;
+    }
+
+
+    /**
+     * 初始化获取上传地址
+     * @return 上传地址
+     */
+    private String initUploadPath(){
+        return sysConfigService.selectConfigByKey("sys.upload.path");
     }
 
     @Override

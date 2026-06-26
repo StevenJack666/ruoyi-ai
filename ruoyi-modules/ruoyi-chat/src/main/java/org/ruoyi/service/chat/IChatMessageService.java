@@ -94,5 +94,5 @@ public interface IChatMessageService {
      * @param role      角色类型
      * @param modelName 模型名称
      */
-    void saveChatMessage(Long userId, Long sessionId, String content, String role, String modelName);
+    Long saveChatMessage(Long userId, Long sessionId, String content, String role, String modelName);
 }

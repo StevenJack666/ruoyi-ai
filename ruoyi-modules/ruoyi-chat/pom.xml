@@ -194,6 +194,14 @@
             <groupId>org.ruoyi</groupId>
             <artifactId>ruoyi-common-oss</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.sun.xml.bind</groupId>
+            <artifactId>jaxb-impl</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.ruoyi</groupId>
+            <artifactId>ruoyi-system</artifactId>
+        </dependency>
 
     </dependencies>
 

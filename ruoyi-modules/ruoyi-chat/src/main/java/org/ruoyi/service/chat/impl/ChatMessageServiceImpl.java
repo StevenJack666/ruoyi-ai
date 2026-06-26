@@ -1,10 +1,15 @@
 package org.ruoyi.service.chat.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
 import org.ruoyi.common.chat.domain.bo.chat.ChatMessageBo;
+import org.ruoyi.common.chat.domain.vo.MimeTypeUtils;
 import org.ruoyi.common.chat.domain.vo.chat.ChatMessageVo;
+import org.ruoyi.common.chat.domain.vo.file.FileInfoVo;
 import org.ruoyi.common.chat.entity.chat.ChatMessage;
+import org.ruoyi.common.chat.entity.rel.SessionMessageFile;
 import org.ruoyi.common.core.utils.MapstructUtils;
 import org.ruoyi.common.core.utils.StringUtils;
 import org.ruoyi.common.mybatis.core.page.TableDataInfo;
@@ -14,14 +19,16 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.ruoyi.domain.entity.knowledge.SessionUploadRecord;
+import org.ruoyi.mapper.knowledge.SessionUploadRecordMapper;
+import org.ruoyi.mapper.rel.SessionMessageFileMapper;
 import org.ruoyi.service.chat.IChatMessageService;
 import org.springframework.stereotype.Service;
 import org.ruoyi.mapper.chat.ChatMessageMapper;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Collection;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 聊天消息Service业务层处理
@@ -35,6 +42,10 @@ import java.util.Collection;
 public class ChatMessageServiceImpl implements IChatMessageService {
 
     private final ChatMessageMapper baseMapper;
+
+    private final SessionMessageFileMapper sessionMessageFileMapper;
+
+    private final SessionUploadRecordMapper sessionUploadRecordMapper;
 
     /**
      * 查询聊天消息
@@ -56,8 +67,66 @@ public class ChatMessageServiceImpl implements IChatMessageService {
      */
     @Override
     public TableDataInfo<ChatMessageVo> queryPageList(ChatMessageBo bo, PageQuery pageQuery) {
-        LambdaQueryWrapper<ChatMessage> lqw = buildQueryWrapper(bo);
+        // 1. 分页查询消息
+        LambdaQueryWrapper<ChatMessage> lqw = buildLambdaQueryWrapper(bo);
         Page<ChatMessageVo> result = baseMapper.selectVoPage(pageQuery.build(), lqw);
+
+        // 【卫语句】如果没有数据，直接返回，避免后续无意义的判断
+        if (result == null || CollectionUtils.isEmpty(result.getRecords())) {
+            return TableDataInfo.build(result);
+        }
+
+        List<ChatMessageVo> records = result.getRecords();
+        List<Long> messageIds = records.stream().map(ChatMessageVo::getId).toList();
+
+        // 2. 批量查询关联关系 (1次SQL)
+        List<SessionMessageFile> allMessageFiles = sessionMessageFileMapper.selectList(
+            new LambdaQueryWrapper<SessionMessageFile>()
+                .in(SessionMessageFile::getMessageId, messageIds)
+        );
+        if (CollectionUtils.isEmpty(allMessageFiles)) {
+            return TableDataInfo.build(result); // 无关联文件，直接返回
+        }
+
+        // 3. 批量查询文件详情 (1次SQL)
+        List<Long> ossIds = allMessageFiles.stream()
+            .map(SessionMessageFile::getOssFileId)
+            .distinct() // 去重，防止同一个文件被多次查询
+            .toList();
+
+        List<SessionUploadRecord> uploadRecords = sessionUploadRecordMapper.selectList(
+            new LambdaQueryWrapper<SessionUploadRecord>()
+                .in(SessionUploadRecord::getOssId, ossIds)
+        );
+
+        // 4. 将上传记录转换为 Map，方便 O(1) 时间复杂度查找
+        Map<Long, SessionUploadRecord> recordMap = uploadRecords.stream()
+            .collect(Collectors.toMap(SessionUploadRecord::getOssId, Function.identity(), (a, b) -> a));
+
+        // 5. 按 MessageId 分组关联关系，并填充到消息中
+        Map<Long, List<SessionMessageFile>> filesGroupByMsgId = allMessageFiles.stream()
+            .collect(Collectors.groupingBy(SessionMessageFile::getMessageId));
+
+        for (ChatMessageVo record : records) {
+            List<SessionMessageFile> msgFiles = filesGroupByMsgId.get(record.getId());
+            if (CollectionUtils.isEmpty(msgFiles)) continue; // 该消息无文件，跳过
+
+            List<FileInfoVo> fileInfoVoList = msgFiles.stream()
+                .map(f -> recordMap.get(f.getOssFileId())) // 从 Map 中获取
+                .filter(Objects::nonNull)                  // 过滤掉可能不存在的记录
+                .map(uploadRecord -> {                     // 转换并组装 VO
+                    FileInfoVo vo = new FileInfoVo();
+                    vo.setFileName(uploadRecord.getFileName());
+                    vo.setFileType(MimeTypeUtils.getMimeType(uploadRecord.getFileType()));
+                    vo.setFileSize(String.valueOf(uploadRecord.getFileSize()));
+                    vo.setOssUrl(uploadRecord.getOssUrl());
+                    return vo;
+                })
+                .toList();
+
+            record.setFileList(fileInfoVoList);
+        }
+
         return TableDataInfo.build(result);
     }
 
@@ -69,11 +138,11 @@ public class ChatMessageServiceImpl implements IChatMessageService {
      */
     @Override
     public List<ChatMessageVo> queryList(ChatMessageBo bo) {
-        LambdaQueryWrapper<ChatMessage> lqw = buildQueryWrapper(bo);
+        LambdaQueryWrapper<ChatMessage> lqw = buildLambdaQueryWrapper(bo);
         return baseMapper.selectVoList(lqw);
     }
 
-    private LambdaQueryWrapper<ChatMessage> buildQueryWrapper(ChatMessageBo bo) {
+    private LambdaQueryWrapper<ChatMessage> buildLambdaQueryWrapper(ChatMessageBo bo) {
         Map<String, Object> params = bo.getParams();
         LambdaQueryWrapper<ChatMessage> lqw = Wrappers.lambdaQuery();
         lqw.orderByAsc(ChatMessage::getId);
@@ -84,6 +153,17 @@ public class ChatMessageServiceImpl implements IChatMessageService {
         lqw.eq(bo.getTotalTokens() != null, ChatMessage::getTotalTokens, bo.getTotalTokens());
         lqw.like(StringUtils.isNotBlank(bo.getModelName()), ChatMessage::getModelName, bo.getModelName());
         return lqw;
+    }
+
+    private QueryWrapper<ChatMessage> buildQueryWrapperWithAlias(ChatMessageBo bo) {
+        QueryWrapper<ChatMessage> qw = Wrappers.query();
+        qw.eq(bo.getSessionId() != null, "cm.session_id", bo.getSessionId());
+        qw.eq(bo.getUserId() != null, "cm.user_id", bo.getUserId());
+        qw.eq(StringUtils.isNotBlank(bo.getContent()), "cm.content", bo.getContent());
+        qw.eq(StringUtils.isNotBlank(bo.getRole()), "cm.role", bo.getRole());
+        qw.eq(bo.getTotalTokens() != null, "cm.total_tokens", bo.getTotalTokens());
+        qw.like(StringUtils.isNotBlank(bo.getModelName()), "cm.model_name", bo.getModelName());
+        return qw;
     }
 
     /**
@@ -195,11 +275,11 @@ public class ChatMessageServiceImpl implements IChatMessageService {
      * @param modelName 模型名称
      */
     @Override
-    public void saveChatMessage(Long userId, Long sessionId, String content, String role, String modelName) {
+    public Long saveChatMessage(Long userId, Long sessionId, String content, String role, String modelName) {
         try {
             if (userId == null) {
                 log.warn("缺少用户ID，无法保存消息");
-                return;
+                return null;
             }
 
             ChatMessageBo messageBo = new ChatMessageBo();
@@ -211,8 +291,10 @@ public class ChatMessageServiceImpl implements IChatMessageService {
 
             insertByBo(messageBo);
             log.debug("保存聊天消息成功，角色: {}, 会话: {}", role, sessionId);
+            return messageBo.getId();
         } catch (Exception e) {
             log.error("保存聊天消息时出错: {}", e.getMessage(), e);
+            return null;
         }
     }
 }

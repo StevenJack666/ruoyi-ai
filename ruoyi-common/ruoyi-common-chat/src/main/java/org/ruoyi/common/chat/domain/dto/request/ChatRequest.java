@@ -104,4 +104,19 @@ public class ChatRequest {
      */
     private List<ChatMessage> contextMessages;
 
+    /**
+     * 文件主键列表
+     */
+    private List<Long> ossIds;
+
+    /**
+     * 是否上传文件
+     */
+    private Boolean isUploadFile;
+
+    /**
+     * 文件元数据
+     */
+    private String fileMetaData;
+
 }

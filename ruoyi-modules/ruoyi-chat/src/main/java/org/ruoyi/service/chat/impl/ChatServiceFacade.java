@@ -1,6 +1,7 @@
 package org.ruoyi.service.chat.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import cn.hutool.core.util.IdUtil;
 import dev.langchain4j.agentic.AgenticServices;
 import dev.langchain4j.agentic.supervisor.SupervisorAgent;
 import dev.langchain4j.agentic.supervisor.SupervisorResponseStrategy;
@@ -43,9 +44,11 @@ import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.chat.domain.dto.request.ReSumeRunner;
 import org.ruoyi.common.chat.domain.dto.request.WorkFlowRunner;
 import org.ruoyi.common.chat.domain.vo.chat.ChatModelVo;
+import org.ruoyi.common.chat.entity.rel.SessionMessageFile;
 import org.ruoyi.common.chat.enums.RoleType;
 import org.ruoyi.common.chat.service.chat.IChatModelService;
 import org.ruoyi.common.chat.service.chat.IChatService;
+import org.ruoyi.common.chat.service.rel.ISessionMessageFileService;
 import org.ruoyi.common.chat.service.workFlow.IWorkFlowStarterService;
 import org.ruoyi.common.core.utils.ObjectUtils;
 import org.ruoyi.common.core.utils.StringUtils;
@@ -75,12 +78,14 @@ import org.ruoyi.service.knowledge.TextSplitter;
 import org.ruoyi.service.retrieval.KnowledgeRetrievalService;
 import org.ruoyi.service.knowledge.retriever.CustomVectorRetriever;
 import org.ruoyi.service.vector.VectorStoreService;
+import org.ruoyi.system.service.ISysConfigService;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.ruoyi.common.core.domain.dto.OssDTO;
 
+import java.io.ByteArrayInputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -116,6 +121,10 @@ public class ChatServiceFacade implements IChatService {
 
     private final IChatModelService chatModelService;
 
+    private final ISysConfigService sysConfigService;
+
+    private final ISessionMessageFileService sessionMessageFileService;
+
     private final ChatServiceFactory chatServiceFactory;
 
     private final IKnowledgeInfoService knowledgeInfoService;
@@ -145,7 +154,7 @@ public class ChatServiceFacade implements IChatService {
 
     // ChatServiceFacade.java
     // todo 文件上传
-    public Long attachSessionFile(MultipartFile file, Long sessionId, String providerCode) {
+    public Long attachSessionFile(MultipartFile file, Long sessionId) {
         Long fileOssId = null;
         String fileName = file.getOriginalFilename();
         String ext = fileName.substring(fileName.lastIndexOf("."));
@@ -153,25 +162,17 @@ public class ChatServiceFacade implements IChatService {
         Long userId = LoginHelper.getUserId();
         log.info("上传文件: fileName={}, fileSize={}", fileName, fileSize);
 
-        // 1. 解析 todo，可以做成异步的，保障前端体验
-        ResourceLoader loader = resourceLoaderFactory.getLoaderByFileType(ext);
-        String text;
-        try (InputStream is = file.getInputStream()) {   // try-with-resources 自动关流
-            text = loader.getContent(is);
+        // 1. 获取文件字节数组（防止流被消费 导致NoSuchFileException）
+        byte[] fileBytes;
+        try (InputStream is = file.getInputStream()) {
+            fileBytes = is.readAllBytes();
         } catch (IOException e) {
             log.error("会话文档读取失败: fileName={}", fileName, e);
             throw new ServiceException("文件读取失败，请重试");
         }
 
-        // 2. 分块
-        List<String> chunks = loader.getChunkList(text, null);
-        if (CollUtil.isEmpty(chunks)) {
-            log.warn("会话文档分块为空: fileName={}", fileName);
-            return fileOssId;
-        }
-
-        // 3. OSS持久化原始文件（用于溯源）
-        String actualCode = StringUtils.defaultIfEmpty(providerCode, UploadModeType.DEFAULT.getCode());
+        // 2. OSS持久化原始文件（用于溯源）
+        String actualCode = StringUtils.defaultIfEmpty(initUploadMode(), UploadModeType.DEFAULT.getCode());
         IUploadService uploadService = uploadServiceFactory.getOriginalService(actualCode);
         // 将文件上传成数组
         MultipartFile[] files = {file};
@@ -182,7 +183,7 @@ public class ChatServiceFacade implements IChatService {
             throw new ServiceException("上传文件信息异常");
         }
 
-        // 4. 写入上传记录（失败不影响主流程，仅记日志）
+        // 3. 写入上传记录（失败不影响主流程，仅记日志）
         for (SysOssUploadVo sysOssUploadVo : uploadVos) {
             try {
                 SessionUploadRecord record = new SessionUploadRecord();
@@ -201,7 +202,24 @@ public class ChatServiceFacade implements IChatService {
             }
         }
 
-        // 5. 存储缓存
+        // 4. 解析 todo，可以做成异步的，保障前端体验
+        ResourceLoader loader = resourceLoaderFactory.getLoaderByFileType(ext);
+        String text;
+        try (InputStream is = new ByteArrayInputStream(fileBytes)) { // try-with-resources 自动关流
+            text = loader.getContent(is);
+        } catch (IOException e) {
+            log.error("会话文档读取失败: fileName={}", fileName, e);
+            throw new ServiceException("文件读取失败，请重试");
+        }
+
+        // 5. 分块
+        List<String> chunks = loader.getChunkList(text, null);
+        if (CollUtil.isEmpty(chunks)) {
+            log.warn("会话文档分块为空: fileName={}", fileName);
+            return fileOssId;
+        }
+
+        // 6. 存储缓存
         try {
             String cacheKey = "session:docs:" + sessionId;
             RedisUtils.deleteObject(cacheKey);
@@ -222,7 +240,6 @@ public class ChatServiceFacade implements IChatService {
      * @return SseEmitter
      */
     public SseEmitter sseChat(ChatRequest chatRequest) {
-
         // 4. 具体的服务实现
         Long userId = LoginHelper.getUserId();
         String tokenValue = StpUtil.getTokenValue();
@@ -243,8 +260,8 @@ public class ChatServiceFacade implements IChatService {
         chatRequest.setChatModelVo(chatModelVo);
         chatRequest.setContextMessages(contextMessages);
 
-        // 保存用户消息
-        chatMessageService.saveChatMessage(userId, chatRequest.getSessionId(), chatRequest.getContent(), RoleType.USER.getName(), chatRequest.getModel());
+        // 处理聊天消息(包含多模态)
+        processChatMessage(chatRequest, userId);
 
         // 3. 处理特殊聊天模式（工作流、人机交互恢复、思考模式）
         SseEmitter sseEmitter = handleSpecialChatModes(chatRequest);
@@ -263,6 +280,42 @@ public class ChatServiceFacade implements IChatService {
         StreamingChatModel streamingChatModel = chatService.buildStreamingChatModel(chatModelVo, chatRequest);
         streamingChatModel.chat(contextMessages, handler);
         return emitter;
+    }
+
+    /**
+     * 处理聊天消息
+     */
+    private void processChatMessage(ChatRequest chatRequest, Long userId) {
+        // 获取是否上传文件
+        boolean isUploadFile = chatRequest.getIsUploadFile() != null && chatRequest.getIsUploadFile();
+        if (isUploadFile) {
+            // 1. 非上传文件场景：保存用户输入的文本消息
+            List<Long> ossIds = chatRequest.getOssIds();
+            if (CollectionUtils.isEmpty(ossIds)){
+                throw new ServiceException("上传的文件信息为空！");
+            }
+            // 2. 存储消息
+            Long messageId = chatMessageService.saveChatMessage(userId, chatRequest.getSessionId(),
+                chatRequest.getContent(), RoleType.USER.getName(), chatRequest.getModel());
+            if(null == messageId){
+                throw new ServiceException("存储消息异常：获取不到消息ID主键");
+            }
+            // 3. 保存关联对象
+            List<SessionMessageFile> messageFileList = new ArrayList<>();
+            for (Long ossId : ossIds) {
+                SessionMessageFile sessionMessageFile = new SessionMessageFile();
+                sessionMessageFile.setOssFileId(ossId);
+                sessionMessageFile.setMessageId(messageId);
+                messageFileList.add(sessionMessageFile);
+            }
+            if (!messageFileList.isEmpty()){
+                sessionMessageFileService.batchInsert(messageFileList);
+            }
+            return;
+        }
+        // 非文件：存储消息
+        chatMessageService.saveChatMessage(userId, chatRequest.getSessionId(),
+            chatRequest.getContent(), RoleType.USER.getName(), chatRequest.getModel());
     }
 
     /**
@@ -810,5 +863,12 @@ public class ChatServiceFacade implements IChatService {
         return sb.toString();
     }
 
+    /**
+     * 上传模式
+     * @return
+     */
+    private String initUploadMode(){
+        return sysConfigService.selectConfigByKey("upload.mode");
+    }
 }
 
