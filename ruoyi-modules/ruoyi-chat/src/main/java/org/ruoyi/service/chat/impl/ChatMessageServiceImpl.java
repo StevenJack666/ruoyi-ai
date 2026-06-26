@@ -116,10 +116,10 @@ public class ChatMessageServiceImpl implements IChatMessageService {
                 .filter(Objects::nonNull)                  // 过滤掉可能不存在的记录
                 .map(uploadRecord -> {                     // 转换并组装 VO
                     FileInfoVo vo = new FileInfoVo();
-                    vo.setFileName(uploadRecord.getFileName());
+                    vo.setName(uploadRecord.getFileName());
                     vo.setFileType(MimeTypeUtils.getMimeType(uploadRecord.getFileType()));
                     vo.setFileSize(String.valueOf(uploadRecord.getFileSize()));
-                    vo.setOssUrl(uploadRecord.getOssUrl());
+                    vo.setUrl(uploadRecord.getOssUrl());
                     return vo;
                 })
                 .toList();

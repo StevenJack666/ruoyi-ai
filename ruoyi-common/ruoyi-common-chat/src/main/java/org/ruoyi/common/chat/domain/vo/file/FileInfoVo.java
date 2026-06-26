@@ -18,7 +18,7 @@ public class FileInfoVo {
      * 文件名称
      */
     @ExcelIgnore
-    private String fileName;
+    private String name;
 
     /**
      * 文件类型
@@ -30,5 +30,5 @@ public class FileInfoVo {
      * 文件地址
      */
     @ExcelIgnore
-    private String ossUrl;
+    private String url;
 }
