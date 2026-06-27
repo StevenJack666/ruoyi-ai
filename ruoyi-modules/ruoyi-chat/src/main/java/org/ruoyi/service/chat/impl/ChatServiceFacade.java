@@ -30,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
-import org.ehcache.core.util.CollectionUtil;
+
 import org.ruoyi.agent.ChartGenerationAgent;
 import org.ruoyi.agent.EchartsAgent;
 import org.ruoyi.agent.SkillsAgent;
@@ -578,20 +578,29 @@ public class ChatServiceFacade implements IChatService {
      */
     private List<ChatMessage> buildContextMessages(ChatRequest chatRequest) {
         List<ChatMessage> messages = new ArrayList<>();
-
         // 1. 初始化当前用户消息
         UserMessage userMessage = UserMessage.userMessage(chatRequest.getContent());
-
-
-        // 2. todo 会话文档检索（Redis缓存，自动过期）（只收集结果，不修改 userMessage）
-           String sessionDocContext = null;
-           if (chatRequest.getSessionId() != null) {
-               List<String> matchedChunks = searchSessionDocs(
-                   chatRequest.getSessionId(), chatRequest.getContent());
-               if (!CollUtil.isEmpty(matchedChunks)) {
-                   sessionDocContext = buildSessionContext(matchedChunks);
-               }
-           }
+        // 2. 会话文档检索（上传消息全量注入，追问走关键词检索）
+        String sessionDocContext = null;
+        if (chatRequest.getSessionId() != null) {
+            String cacheKey = "session:docs:" + chatRequest.getSessionId();
+            List<String> chunks = RedisUtils.getCacheList(cacheKey);
+            if (!CollUtil.isEmpty(chunks)) {
+                boolean isUpload = chatRequest.getIsUploadFile() != null && chatRequest.getIsUploadFile();
+                if (isUpload) {
+                    // 上传消息：全量注入，确保模型能完整分析文档
+                    sessionDocContext = buildSessionContext(chunks);
+                    log.info("会话文档全量注入: sessionId={}, 分块数={}", chatRequest.getSessionId(), chunks.size());
+                } else {
+                    // 追问消息：关键词检索
+                    List<String> matchedChunks = searchSessionDocs(
+                        chatRequest.getSessionId(), chatRequest.getContent());
+                    if (!CollUtil.isEmpty(matchedChunks)) {
+                        sessionDocContext = buildSessionContext(matchedChunks);
+                    }
+                }
+            }
+        }
 
 
 
@@ -843,7 +852,7 @@ public class ChatServiceFacade implements IChatService {
          }
 
          // 无命中时降级返回全量，防超大文档加安全上限
-         if (matched.isEmpty()) {
+         if (matched.isEmpty() || matched.size() < 5) {
              return chunks.size() > 20 ? chunks.subList(0, 20) : chunks;
          }
 
