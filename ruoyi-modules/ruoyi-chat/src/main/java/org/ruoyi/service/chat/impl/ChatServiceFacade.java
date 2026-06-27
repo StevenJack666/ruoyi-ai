@@ -306,6 +306,7 @@ public class ChatServiceFacade implements IChatService {
                 SessionMessageFile sessionMessageFile = new SessionMessageFile();
                 sessionMessageFile.setOssFileId(ossId);
                 sessionMessageFile.setMessageId(messageId);
+                sessionMessageFile.setSessionId(chatRequest.getSessionId());
                 messageFileList.add(sessionMessageFile);
             }
             if (!messageFileList.isEmpty()){

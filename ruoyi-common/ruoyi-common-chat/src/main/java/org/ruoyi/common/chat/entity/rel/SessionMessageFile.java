@@ -33,6 +33,12 @@ public class SessionMessageFile extends BaseEntity {
      */
     private Long messageId;
 
+
+    /**
+     * 对话ID
+     */
+    private Long sessionId;
+
     /**
      * 文件ID
      */
