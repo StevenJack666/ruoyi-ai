@@ -1,6 +1,6 @@
 package org.ruoyi.common.chat.service.rel;
 
-import org.ruoyi.common.chat.entity.rel.SessionMessageFile;
+import org.ruoyi.common.chat.entity.rel.SessionMessageFileRel;
 
 import java.util.List;
 
@@ -14,21 +14,21 @@ public interface ISessionMessageFileService {
 
     /**
      * 存储
-     * @param sessionMessageFile
+     * @param sessionMessageFileRel
      * @return
      */
-    Long insert(SessionMessageFile sessionMessageFile);
+    Long insert(SessionMessageFileRel sessionMessageFileRel);
 
     /**
      * 根据消息ID查询关联数据
      * @param messageId
      * @return
      */
-    List<SessionMessageFile> selectByMessageId(Long messageId);
+    List<SessionMessageFileRel> selectByMessageId(Long messageId);
 
     /**
      * 批量存储数据
-     * @param sessionMessageFileList
+     * @param sessionMessageFileRelList
      */
-    void batchInsert(List<SessionMessageFile> sessionMessageFileList);
+    void batchInsert(List<SessionMessageFileRel> sessionMessageFileRelList);
 }

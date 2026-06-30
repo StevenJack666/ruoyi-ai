@@ -9,7 +9,7 @@ import org.ruoyi.common.chat.domain.vo.MimeTypeUtils;
 import org.ruoyi.common.chat.domain.vo.chat.ChatMessageVo;
 import org.ruoyi.common.chat.domain.vo.file.FileInfoVo;
 import org.ruoyi.common.chat.entity.chat.ChatMessage;
-import org.ruoyi.common.chat.entity.rel.SessionMessageFile;
+import org.ruoyi.common.chat.entity.rel.SessionMessageFileRel;
 import org.ruoyi.common.core.utils.MapstructUtils;
 import org.ruoyi.common.core.utils.StringUtils;
 import org.ruoyi.common.mybatis.core.page.TableDataInfo;
@@ -80,9 +80,9 @@ public class ChatMessageServiceImpl implements IChatMessageService {
         List<Long> messageIds = records.stream().map(ChatMessageVo::getId).toList();
 
         // 2. 批量查询关联关系 (1次SQL)
-        List<SessionMessageFile> allMessageFiles = sessionMessageFileMapper.selectList(
-            new LambdaQueryWrapper<SessionMessageFile>()
-                .in(SessionMessageFile::getMessageId, messageIds)
+        List<SessionMessageFileRel> allMessageFiles = sessionMessageFileMapper.selectList(
+            new LambdaQueryWrapper<SessionMessageFileRel>()
+                .in(SessionMessageFileRel::getMessageId, messageIds)
         );
         if (CollectionUtils.isEmpty(allMessageFiles)) {
             return TableDataInfo.build(result); // 无关联文件，直接返回
@@ -90,7 +90,7 @@ public class ChatMessageServiceImpl implements IChatMessageService {
 
         // 3. 批量查询文件详情 (1次SQL)
         List<Long> ossIds = allMessageFiles.stream()
-            .map(SessionMessageFile::getOssFileId)
+            .map(SessionMessageFileRel::getOssFileId)
             .distinct() // 去重，防止同一个文件被多次查询
             .toList();
 
@@ -104,11 +104,11 @@ public class ChatMessageServiceImpl implements IChatMessageService {
             .collect(Collectors.toMap(SessionUploadRecord::getOssId, Function.identity(), (a, b) -> a));
 
         // 5. 按 MessageId 分组关联关系，并填充到消息中
-        Map<Long, List<SessionMessageFile>> filesGroupByMsgId = allMessageFiles.stream()
-            .collect(Collectors.groupingBy(SessionMessageFile::getMessageId));
+        Map<Long, List<SessionMessageFileRel>> filesGroupByMsgId = allMessageFiles.stream()
+            .collect(Collectors.groupingBy(SessionMessageFileRel::getMessageId));
 
         for (ChatMessageVo record : records) {
-            List<SessionMessageFile> msgFiles = filesGroupByMsgId.get(record.getId());
+            List<SessionMessageFileRel> msgFiles = filesGroupByMsgId.get(record.getId());
             if (CollectionUtils.isEmpty(msgFiles)) continue; // 该消息无文件，跳过
 
             List<FileInfoVo> fileInfoVoList = msgFiles.stream()

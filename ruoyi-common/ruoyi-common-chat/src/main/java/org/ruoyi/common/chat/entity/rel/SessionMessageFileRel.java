@@ -16,8 +16,8 @@ import java.io.Serial;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("session_message_file")
-public class SessionMessageFile extends BaseEntity {
+@TableName("session_message_file_rel")
+public class SessionMessageFileRel extends BaseEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;

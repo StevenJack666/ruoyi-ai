@@ -2,7 +2,7 @@ package org.ruoyi.mapper.rel;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
-import org.ruoyi.common.chat.entity.rel.SessionMessageFile;
+import org.ruoyi.common.chat.entity.rel.SessionMessageFileRel;
 
 /**
  * 会话消息文件Mapper接口
@@ -11,6 +11,6 @@ import org.ruoyi.common.chat.entity.rel.SessionMessageFile;
  * @date 2025-12-14
  */
 @Mapper
-public interface SessionMessageFileMapper extends BaseMapper<SessionMessageFile> {
+public interface SessionMessageFileMapper extends BaseMapper<SessionMessageFileRel> {
 }
 

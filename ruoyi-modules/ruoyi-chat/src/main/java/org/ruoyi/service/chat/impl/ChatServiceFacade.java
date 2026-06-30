@@ -1,11 +1,9 @@
 package org.ruoyi.service.chat.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
-import cn.hutool.core.util.IdUtil;
 import dev.langchain4j.agentic.AgenticServices;
 import dev.langchain4j.agentic.supervisor.SupervisorAgent;
 import dev.langchain4j.agentic.supervisor.SupervisorResponseStrategy;
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.mcp.McpToolProvider;
@@ -14,7 +12,6 @@ import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.transport.McpTransport;
 import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
@@ -44,7 +41,7 @@ import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.chat.domain.dto.request.ReSumeRunner;
 import org.ruoyi.common.chat.domain.dto.request.WorkFlowRunner;
 import org.ruoyi.common.chat.domain.vo.chat.ChatModelVo;
-import org.ruoyi.common.chat.entity.rel.SessionMessageFile;
+import org.ruoyi.common.chat.entity.rel.SessionMessageFileRel;
 import org.ruoyi.common.chat.enums.RoleType;
 import org.ruoyi.common.chat.service.chat.IChatModelService;
 import org.ruoyi.common.chat.service.chat.IChatService;
@@ -83,7 +80,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import org.ruoyi.common.core.domain.dto.OssDTO;
 
 import java.io.ByteArrayInputStream;
 import java.time.Duration;
@@ -94,7 +90,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import cn.hutool.core.collection.CollUtil;
 import org.ruoyi.common.core.exception.ServiceException;
-import org.ruoyi.common.core.service.OssService;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -301,13 +296,13 @@ public class ChatServiceFacade implements IChatService {
                 throw new ServiceException("存储消息异常：获取不到消息ID主键");
             }
             // 3. 保存关联对象
-            List<SessionMessageFile> messageFileList = new ArrayList<>();
+            List<SessionMessageFileRel> messageFileList = new ArrayList<>();
             for (Long ossId : ossIds) {
-                SessionMessageFile sessionMessageFile = new SessionMessageFile();
-                sessionMessageFile.setOssFileId(ossId);
-                sessionMessageFile.setMessageId(messageId);
-                sessionMessageFile.setSessionId(chatRequest.getSessionId());
-                messageFileList.add(sessionMessageFile);
+                SessionMessageFileRel sessionMessageFileRel = new SessionMessageFileRel();
+                sessionMessageFileRel.setOssFileId(ossId);
+                sessionMessageFileRel.setMessageId(messageId);
+                sessionMessageFileRel.setSessionId(chatRequest.getSessionId());
+                messageFileList.add(sessionMessageFileRel);
             }
             if (!messageFileList.isEmpty()){
                 sessionMessageFileService.batchInsert(messageFileList);
