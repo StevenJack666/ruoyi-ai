@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.ruoyi.support.mapper.UserPermissionResourceMapper">
+
+    <resultMap id="UserPermissionResourceResult" type="org.ruoyi.support.domain.UserPermissionResource">
+        <result property="id"    column="id"    />
+        <result property="appId"    column="app_id"    />
+        <result property="resourceUri"    column="resource_uri"    />
+    </resultMap>
+
+    <sql id="selectUserPermissionResourceVo">
+        select id, app_id, resource_uri from user_permission_resource
+    </sql>
+
+    <select id="selectUserPermissionResourceList" parameterType="org.ruoyi.support.domain.UserPermissionResource" resultMap="UserPermissionResourceResult">
+        <include refid="selectUserPermissionResourceVo"/>
+        <where>
+            <if test="appId != null  and appId != ''"> and app_id = #{appId}</if>
+            <if test="resourceUri != null  and resourceUri != ''"> and resource_uri like concat('%',concat(#{resourceUri}, '%'))</if>
+        </where>
+        <if test="params.orderBy == null  or params.orderBy == ''">
+            order by app_id asc ,id asc
+        </if>
+    </select>
+
+    <select id="selectUserPermissionResourceById" parameterType="Long" resultMap="UserPermissionResourceResult">
+        <include refid="selectUserPermissionResourceVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectUserPermissionResourceByIds" parameterType="Long" resultMap="UserPermissionResourceResult">
+        <include refid="selectUserPermissionResourceVo"/>
+        where id in
+        <foreach item="ids" collection="array" open="(" separator="," close=")">
+            #{ids}
+        </foreach>
+    </select>
+
+    <insert id="insert" parameterType="org.ruoyi.support.domain.UserPermissionResource" useGeneratedKeys="true" keyProperty="id">
+        insert into user_permission_resource
+        (
+            app_id,
+            resource_uri
+        ) values
+        (
+            #{appId},
+            #{resourceUri}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="org.ruoyi.support.domain.UserPermissionResource">
+        update user_permission_resource set
+            app_id = #{appId},
+            resource_uri = #{resourceUri}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteUserPermissionResourceById" parameterType="Long">
+        delete from user_permission_resource where id = #{id}
+    </delete>
+
+    <delete id="deleteUserPermissionResourceByIds" parameterType="String">
+        delete from user_permission_resource where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

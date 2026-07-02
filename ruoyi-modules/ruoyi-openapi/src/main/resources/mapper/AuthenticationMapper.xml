@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.ruoyi.support.mapper.AuthenticationMapper">
+
+    <select id="getAuthenInfo" resultType="org.ruoyi.support.domain.vo.AuthenticationVO">
+        SELECT app_id AS appId,
+            security_key AS securityKey,
+            security_type AS securityType,
+            organization AS organization
+        FROM user_authen_info
+    </select>
+
+    <select id="getPermissionResourceByAppId" resultType="java.lang.String">
+        SELECT resource_uri
+        FROM user_permission_resource
+        WHERE app_id = #{appId}
+    </select>
+
+    <select id="getIpByAppId" resultType="java.lang.String">
+        SELECT ip
+        FROM user_permission_ip
+        WHERE app_id = #{appId}
+    </select>
+
+    <select id="getInterceptorResource" resultType="java.lang.String">
+        SELECT resource_uri
+        FROM resource_info
+        WHERE status = 0
+    </select>
+</mapper>

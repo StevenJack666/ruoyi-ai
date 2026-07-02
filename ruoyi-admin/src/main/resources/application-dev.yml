@@ -269,3 +269,25 @@ justauth:
       redirect-uri: ${justauth.address}/social-callback?source=gitea
 
 AGENT_ALLOWED_TABLES: ""
+
+openapi:
+  # expired-time 请求签名有效时间(s)
+  expired-time: 1200
+  #  openapid uuid缓存时长(ms)
+  cache-uuid-time: 60000
+  # 分页查询每页返回最大数
+  max-page-size: 2000
+
+  # 是否进行签名验: 是: true, 否: false, 默认为true
+  signature:
+    isVerify: true
+    # 是否校验ip
+    isVerifyIp: false
+    # 签名信息刷新时间, 单位秒
+    info:
+      refresh: 360000
+  #流控缓存更新时间
+  guava:
+    cache:
+      refresh:
+        data-param-config: 3600

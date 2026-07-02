@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.ruoyi.support.mapper.ResourceInfoMapper">
+
+    <resultMap id="ResourceInfoResult" type="org.ruoyi.support.domain.ResourceInfo">
+        <result property="id" column="id"/>
+        <result property="resourceUri" column="resource_uri"/>
+        <result property="name" column="name"/>
+        <result property="status" column="status"/>
+    </resultMap>
+
+    <sql id="selectResourceInfoVo">
+        select id, resource_uri, name, status from resource_info
+    </sql>
+
+    <select id="selectResourceInfoList" parameterType="org.ruoyi.support.domain.ResourceInfo" resultMap="ResourceInfoResult">
+        <include refid="selectResourceInfoVo"/>
+        <where>
+            <if test="resourceUri != null and resourceUri != ''">and resource_uri like concat('%',concat(#{resourceUri}, '%')) </if>
+            <if test="name != null and name != ''">and name like concat('%',concat(#{name}, '%'))</if>
+            <if test="status != null and status != ''">and status = #{status}</if>
+        </where>
+        <if test="params.orderBy == null  or params.orderBy == ''">
+            order by id asc
+        </if>
+    </select>
+
+    <select id="selectResourceInfoById" parameterType="Long" resultMap="ResourceInfoResult">
+        <include refid="selectResourceInfoVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectResourceInfoByIds" parameterType="Long" resultMap="ResourceInfoResult">
+        <include refid="selectResourceInfoVo"/>
+        where id in
+        <foreach item="ids" collection="array" open="(" separator="," close=")">
+            #{ids}
+        </foreach>
+    </select>
+
+    <insert id="insert" parameterType="org.ruoyi.support.domain.ResourceInfo" useGeneratedKeys="true" keyProperty="id">
+        insert into resource_info
+        (
+            resource_uri,
+            name,
+            status
+        ) values
+        (
+            #{resourceUri},
+            #{name},
+            #{status}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="org.ruoyi.support.domain.ResourceInfo">
+        update resource_info set
+                 resource_uri = #{resourceUri},
+                 name = #{name},
+                 status = #{status}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteResourceInfoById" parameterType="Long">
+        delete from resource_info where id = #{id}
+    </delete>
+
+    <delete id="deleteResourceInfoByIds" parameterType="Long">
+        delete from resource_info where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

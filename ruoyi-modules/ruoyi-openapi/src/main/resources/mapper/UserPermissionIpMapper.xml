@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.ruoyi.support.mapper.UserPermissionIpMapper">
+
+    <resultMap id="UserPermissionIpResult" type="org.ruoyi.support.domain.UserPermissionIp">
+        <result property="id"    column="id"    />
+        <result property="appId"    column="app_id"    />
+        <result property="ip"    column="ip"    />
+    </resultMap>
+
+    <sql id="selectUserPermissionIpVo">
+        select id, app_id, ip from user_permission_ip
+    </sql>
+
+    <select id="selectUserPermissionIpList" parameterType="org.ruoyi.support.domain.UserPermissionIp" resultMap="UserPermissionIpResult">
+        <include refid="selectUserPermissionIpVo"/>
+        <where>
+            <if test="appId != null  and appId != ''"> and app_id = #{appId}</if>
+            <if test="ip != null  and ip != ''"> and ip = #{ip}</if>
+        </where>
+        <if test="params.orderBy == null  or params.orderBy == ''">
+            order by app_id asc ,id asc
+        </if>
+    </select>
+
+    <select id="selectUserPermissionIpById" parameterType="Long" resultMap="UserPermissionIpResult">
+        <include refid="selectUserPermissionIpVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectUserPermissionIpByIds" parameterType="Long" resultMap="UserPermissionIpResult">
+        <include refid="selectUserPermissionIpVo"/>
+        where id in
+        <foreach item="ids" collection="array" open="(" separator="," close=")">
+            #{ids}
+        </foreach>
+    </select>
+
+    <insert id="insert" parameterType="org.ruoyi.support.domain.UserPermissionIp" useGeneratedKeys="true" keyProperty="id">
+        insert into user_permission_ip
+        (
+            app_id,
+            ip
+        ) values
+        (
+            #{appId},
+            #{ip}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="org.ruoyi.support.domain.UserPermissionIp">
+        update user_permission_ip set
+            app_id = #{appId},
+            ip = #{ip}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteUserPermissionIpById" parameterType="Long">
+        delete from user_permission_ip where id = #{id}
+    </delete>
+
+    <delete id="deleteUserPermissionIpByIds" parameterType="String">
+        delete from user_permission_ip where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

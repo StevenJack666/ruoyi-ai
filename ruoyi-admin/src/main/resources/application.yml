@@ -123,10 +123,11 @@ security:
     - /*/api-docs/**
     - /warm-flow-ui/config
     - /workflow/run
+    - /openapi/**
 # 多租户配置
 tenant:
   # 是否开启
-  enable: false 
+  enable: false
   # 排除表
   excludes:
     - sys_menu
@@ -148,7 +149,7 @@ mybatis-plus:
   # 多包名使用 例如 org.ruoyi.**.mapper,org.xxx.**.mapper
   mapperPackage: org.ruoyi.**.mapper
   # 对应的 XML 文件位置
-  mapperLocations: classpath*:mapper/**/*Mapper.xml
+  mapperLocations: classpath*:/**/mapper/**/*.xml
   # 实体扫描，多个package用逗号或者分号分隔
   typeAliasesPackage: org.ruoyi.**.domain
   global-config:

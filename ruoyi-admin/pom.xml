@@ -81,6 +81,11 @@
             <artifactId>ruoyi-chat</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.ruoyi</groupId>
+            <artifactId>ruoyi-openapi</artifactId>
+        </dependency>
+
         <!--  工作流模块  -->
         <dependency>
             <groupId>org.ruoyi</groupId>

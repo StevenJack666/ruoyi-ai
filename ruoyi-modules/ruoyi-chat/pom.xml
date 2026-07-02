@@ -155,11 +155,6 @@
             <version>${dify.version}</version>
         </dependency>
 
-        <!-- HikariCP 数据库连接池 -->
-        <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
-        </dependency>
 
         <!-- MySQL JDBC 驱动 -->
         <dependency>

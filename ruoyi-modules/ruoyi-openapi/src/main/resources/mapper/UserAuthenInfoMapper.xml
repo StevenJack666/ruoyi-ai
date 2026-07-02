@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.ruoyi.support.mapper.UserAuthenInfoMapper">
+
+    <resultMap id="UserAuthenInfoResult" type="org.ruoyi.support.domain.UserAuthenInfo">
+        <result property="id"    column="id"    />
+        <result property="appId"    column="app_id"    />
+        <result property="securityKey"    column="security_key"    />
+        <result property="unSecurityKey"    column="un_security_key"    />
+        <result property="securityType"    column="security_type"    />
+        <result property="organization"    column="organization"    />
+    </resultMap>
+
+    <sql id="selectUserAuthenInfoVo">
+        select id, app_id, un_security_key, security_key, security_type, organization from user_authen_info
+    </sql>
+
+    <select id="selectUserAuthenInfoList" parameterType="org.ruoyi.support.domain.UserAuthenInfo" resultMap="UserAuthenInfoResult">
+        <include refid="selectUserAuthenInfoVo"/>
+        <where>
+            <if test="appId != null  and appId != ''"> and app_id = #{appId}</if>
+            <if test="unSecurityKey != null  and unSecurityKey != ''"> and un_security_key = #{unSecurityKey}</if>
+            <if test="securityKey != null  and securityKey != ''"> and security_key like concat('%',concat(#{securityKey}, '%'))</if>
+            <if test="securityType != null  and securityType != ''"> and security_type = #{securityType}</if>
+            <if test="organization != null  and organization != ''"> and organization like concat('%',concat(#{organization}, '%'))</if>
+        </where>
+        <if test="params.orderBy == null  or params.orderBy == ''">
+            order by id asc
+        </if>
+    </select>
+
+    <select id="selectUserAuthenInfoById" parameterType="Long" resultMap="UserAuthenInfoResult">
+        <include refid="selectUserAuthenInfoVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectUserAuthenInfoByIds" parameterType="Long" resultMap="UserAuthenInfoResult">
+        <include refid="selectUserAuthenInfoVo"/>
+        where id in
+        <foreach item="ids" collection="array" open="(" separator="," close=")">
+            #{ids}
+        </foreach>
+    </select>
+
+    <insert id="insert" parameterType="org.ruoyi.support.domain.UserAuthenInfo" useGeneratedKeys="true" keyProperty="id">
+        insert into user_authen_info
+        (
+            app_id,
+            un_security_key,
+            security_key,
+            security_type,
+            organization
+        ) values
+        (
+            #{appId},
+        #{unSecurityKey},
+            #{securityKey},
+            #{securityType},
+            #{organization}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="org.ruoyi.support.domain.UserAuthenInfo">
+        update user_authen_info set
+            app_id = #{appId},
+            un_security_key = #{unSecurityKey},
+            security_key = #{securityKey},
+            security_type = #{securityType},
+            organization = #{organization}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteUserAuthenInfoById" parameterType="Long">
+        delete from user_authen_info where id = #{id}
+    </delete>
+
+    <delete id="deleteUserAuthenInfoByIds" parameterType="String">
+        delete from user_authen_info where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
