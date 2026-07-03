@@ -50,11 +50,15 @@ MCP HTTP 代理 - 将 HTTP 接口转化为 MCP 工具供大模型调用
 
 import base64
 import json
+import logging
 import os
 import re
 import sys
 import traceback
 from typing import Dict, List, Optional
+
+logger = logging.getLogger('mcp-http-proxy')
+logging.basicConfig(level=logging.INFO, format='%(message)s', stream=sys.stderr)
 
 try:
     import requests as http_requests
@@ -167,22 +171,22 @@ class McpHttpProxy:
             if auth_type == 'bearer':
                 token = tool_auth.get('token', '')
                 headers['Authorization'] = f'Bearer {token}'
-                print(f"[MCP] Auth: Bearer {_mask_value(token)}", file=sys.stderr, flush=True)
+                logger.info(f"[MCP] Auth: Bearer {_mask_value(token)}")
             elif auth_type == 'basic':
                 username = tool_auth.get('username', '')
                 password = tool_auth.get('password', '')
                 encoded = base64.b64encode(f'{username}:{password}'.encode()).decode()
                 headers['Authorization'] = f'Basic {encoded}'
-                print(f"[MCP] Auth: Basic (user={username})", file=sys.stderr, flush=True)
+                logger.info(f"[MCP] Auth: Basic (user={username})")
             elif auth_type == 'custom':
                 name = tool_auth.get('name', '')
                 value = tool_auth.get('value', '')
                 headers[name] = value
-                print(f"[MCP] Auth: Custom {name}={_mask_value(value)}", file=sys.stderr, flush=True)
+                logger.info(f"[MCP] Auth: Custom {name}={_mask_value(value)}")
 
         import urllib.parse
         full_url = f"{url}?{urllib.parse.urlencode(query_params)}" if query_params else url
-        print(f"[MCP] -> {method} {full_url}", file=sys.stderr, flush=True)
+        logger.info(f"[MCP] -> {method} {full_url}")
 
         kwargs = {'headers': headers, 'timeout': 60}
         if body_data is not None:
@@ -196,7 +200,7 @@ class McpHttpProxy:
         except (json.JSONDecodeError, ValueError):
             result = resp.text
 
-        print(f"[MCP] <- {resp.status_code} ({len(result)} bytes)", file=sys.stderr, flush=True)
+        logger.info(f"[MCP] <- {resp.status_code} ({len(result)} bytes)")
         return result
 
     def handle_jsonrpc(self, body: Dict) -> Dict:
@@ -250,7 +254,7 @@ def start_sse(groups: Dict[str, McpHttpProxy], host: str = '0.0.0.0', port: int 
       POST /mcp/message         → 兼容旧端点，等同于 /mcp/message/default
     """
     if Flask is None:
-        print("[ERROR] pip install flask", file=sys.stderr)
+        logger.error("pip install flask")
         sys.exit(1)
 
     from flask import Response as FlaskResponse, request as FlaskRequest
@@ -259,59 +263,57 @@ def start_sse(groups: Dict[str, McpHttpProxy], host: str = '0.0.0.0', port: int 
     # 为每个分组动态注册路由
     for group_name, proxy in groups.items():
         group_suffix = f'/{group_name}' if group_name != 'default' else ''
+        ep_sse = f'sse_{group_name}'
+        ep_msg = f'msg_{group_name}'
 
-        @app.route(f'/mcp{group_suffix}', methods=['GET'])
-        def sse(group=group_name, p=proxy):
-            tools = p._make_tool_definitions()
+        def make_sse_handler(g=group_name, p=proxy):
+            def handler():
+                tools = p._make_tool_definitions()
 
-            def generate():
-                yield f"event: endpoint\ndata: /mcp/message/{group}\n\n"
-                yield f"event: tools\ndata: {json.dumps(tools, ensure_ascii=False)}\n\n"
+                def generate():
+                    yield f"event: endpoint\ndata: /mcp/message/{g}\n\n"
+                    yield f"event: tools\ndata: {json.dumps(tools, ensure_ascii=False)}\n\n"
 
-            return FlaskResponse(generate(), mimetype='text/event-stream',
-                            headers={'Cache-Control': 'no-cache', 'Connection': 'keep-alive'})
+                return FlaskResponse(generate(), mimetype='text/event-stream',
+                                headers={'Cache-Control': 'no-cache', 'Connection': 'keep-alive'})
+            handler.__name__ = ep_sse
+            return handler
 
-        @app.route(f'/mcp/message{group_suffix}', methods=['POST'])
-        def message(group=group_name, p=proxy):
-            body = FlaskRequest.get_json(force=True, silent=True)
-            if not body:
-                return {'jsonrpc': '2.0', 'error': {'code': -32700, 'message': 'Invalid JSON'}}, 400
-            if 'id' not in body:
-                return '', 202
-            return p.handle_jsonrpc(body)
+        def make_msg_handler(g=group_name, p=proxy):
+            def handler():
+                body = FlaskRequest.get_json(force=True, silent=True)
+                if not body:
+                    return {'jsonrpc': '2.0', 'error': {'code': -32700, 'message': 'Invalid JSON'}}, 400
+                if 'id' not in body:
+                    return '', 202
+                return p.handle_jsonrpc(body)
+            handler.__name__ = ep_msg
+            return handler
 
-    # 兼容旧端点：/mcp 和 /mcp/message 指向 default 分组
-    if 'default' not in groups:
-        default_proxy = McpHttpProxy([], auth_config=None)
-        _ensure_default_compat(app, default_proxy)
-    else:
-        _ensure_default_compat(app, groups['default'])
+        app.route(f'/mcp{group_suffix}', methods=['GET'], endpoint=ep_sse)(make_sse_handler())
+        app.route(f'/mcp/message{group_suffix}', methods=['POST'], endpoint=ep_msg)(make_msg_handler())
 
     # 打印启动日志
-    print("[INFO] MCP SSE 服务器已启动 (多分组模式)", file=sys.stderr)
-    print(f"[INFO] 服务器地址: http://{host}:{port}", file=sys.stderr)
+    logger.info(f"MCP SSE 服务器已启动 (多分组模式)")
+    logger.info(f"服务器地址: http://{host}:{port}")
     for group_name, proxy in groups.items():
         endpoint = f"/mcp/{group_name}" if group_name != 'default' else "/mcp"
-        print("", file=sys.stderr)
-        print(f"[分组: {group_name}] SSE 端点: http://{host}:{port}{endpoint}", file=sys.stderr)
+        logger.info(f"")
+        logger.info(f"[分组: {group_name}] SSE 端点: http://{host}:{port}{endpoint}")
         for t in proxy.tools:
-            print(f"       {t['name']}: {t['method']} {t.get('server','')}{t.get('path','/')}", file=sys.stderr)
-    print("", file=sys.stderr)
-    print(f"[INFO] 共 {len(groups)} 个分组, {sum(len(p.tools) for p in groups.values())} 个工具", file=sys.stderr)
+            logger.info(f"       {t['name']}: {t['method']} {t.get('server','')}{t.get('path','/')}")
+    logger.info(f"")
+    logger.info(f"共 {len(groups)} 个分组, {sum(len(p.tools) for p in groups.values())} 个工具")
     app.run(host=host, port=port, threaded=True)
 
 
-def _ensure_default_compat(app, default_proxy):
-    """确保 /mcp 和 /mcp/message 路由存在（兼容旧客户端）"""
-    # 如果 default 分组已注册自己的路由，则无需额外操作
-    pass
 
 
 def start_stdio(proxy: McpHttpProxy):
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
     sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
-    print(f"[INFO] MCP stdio 已就绪, {len(proxy.tools)} 个工具", file=sys.stderr, flush=True)
+    logger.info(f"MCP stdio 已就绪, {len(proxy.tools)} 个工具")
 
     buffer = ''
     while True:
@@ -350,14 +352,14 @@ def load_config(config_path: str) -> Dict[str, Dict]:
     3. 简化格式（纯数组）: [tool1, tool2, ...]            → 自动转为 default 分组
     """
     if not os.path.exists(config_path):
-        print(f"[ERROR] 配置文件不存在: {config_path}", file=sys.stderr)
+        logger.error(f"配置文件不存在: {config_path}")
         sys.exit(1)
 
     with open(config_path, 'r', encoding='utf-8') as f:
         try:
             data = json.load(f)
         except json.JSONDecodeError as e:
-            print(f"[ERROR] JSON 解析失败: {e}", file=sys.stderr)
+            logger.error(f"JSON 解析失败: {e}")
             sys.exit(1)
 
     groups: Dict[str, Dict] = {}
@@ -366,15 +368,15 @@ def load_config(config_path: str) -> Dict[str, Dict]:
         # 新格式：多分组
         raw_groups = data['groups']
         if not isinstance(raw_groups, dict):
-            print("[ERROR] 'groups' 必须是 JSON 对象", file=sys.stderr)
+            logger.error("'groups' 必须是 JSON 对象")
             sys.exit(1)
         for name, cfg in raw_groups.items():
             if not isinstance(cfg, dict):
-                print(f"[ERROR] 分组 '{name}' 配置必须是 JSON 对象", file=sys.stderr)
+                logger.error(f"分组 '{name}' 配置必须是 JSON 对象")
                 sys.exit(1)
             tools = cfg.get('tools', [])
             if not isinstance(tools, list):
-                print(f"[ERROR] 分组 '{name}' 的 'tools' 必须是 JSON 数组", file=sys.stderr)
+                logger.error(f"分组 '{name}' 的 'tools' 必须是 JSON 数组")
                 sys.exit(1)
             auth = cfg.get('auth')
             _validate_tools(tools, name)
@@ -384,7 +386,7 @@ def load_config(config_path: str) -> Dict[str, Dict]:
         auth = data.get('auth')
         tools = data.get('tools', [])
         if not isinstance(tools, list):
-            print("[ERROR] 'tools' 必须是 JSON 数组", file=sys.stderr)
+            logger.error("'tools' 必须是 JSON 数组")
             sys.exit(1)
         _validate_tools(tools, 'default')
         groups['default'] = {'auth': auth, 'tools': tools}
@@ -393,7 +395,7 @@ def load_config(config_path: str) -> Dict[str, Dict]:
         _validate_tools(data, 'default')
         groups['default'] = {'auth': None, 'tools': data}
     else:
-        print("[ERROR] 配置必须是 JSON 数组或对象", file=sys.stderr)
+        logger.error("配置必须是 JSON 数组或对象")
         sys.exit(1)
 
     return groups
@@ -404,7 +406,7 @@ def _validate_tools(tools: List, group_name: str = ''):
     prefix = f"分组 '{group_name}' " if group_name else ""
     for i, t in enumerate(tools):
         if 'name' not in t:
-            print(f"[ERROR] {prefix}第 {i+1} 个工具缺少 'name'", file=sys.stderr)
+            logger.error(f"{prefix}第 {i+1} 个工具缺少 'name'")
             sys.exit(1)
         t.setdefault('server', 'localhost:8080')
         t.setdefault('method', 'GET')
@@ -455,7 +457,7 @@ def main():
         if 'default' in groups:
             start_stdio(groups['default'])
         else:
-            print("[ERROR] Stdio 模式需要 default 分组或旧格式配置", file=sys.stderr)
+            logger.error("Stdio 模式需要 default 分组或旧格式配置")
             sys.exit(1)
     else:
         start_sse(groups, args.host, args.port)
