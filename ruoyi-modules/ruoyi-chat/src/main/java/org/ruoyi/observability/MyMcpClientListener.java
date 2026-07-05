@@ -2,37 +2,28 @@ package org.ruoyi.observability;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.langchain4j.invocation.InvocationContext;
 import dev.langchain4j.mcp.client.McpCallContext;
 import dev.langchain4j.mcp.client.McpClientListener;
 import dev.langchain4j.mcp.client.McpGetPromptResult;
 import dev.langchain4j.mcp.client.McpReadResourceResult;
-import dev.langchain4j.mcp.protocol.*;
+import dev.langchain4j.mcp.protocol.McpCallToolRequest;
+import dev.langchain4j.mcp.protocol.McpClientMessage;
 import dev.langchain4j.service.tool.ToolExecutionResult;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.sse.dto.SseEventDto;
 import org.ruoyi.common.sse.utils.SseMessageUtils;
+import org.ruoyi.mcp.service.core.ToolConfirmationManager;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * MCP 客户端监听器
  * <p>
- * 监听 MCP 工具执行事件，并通过 SSE 推送到前端
- * <p>
- * <b>SSE 推送格式：</b>
- * <pre>
- * {
- *   "event": "mcp",
- *   "content": "{\"name\":\"工具名称\",\"status\":\"pending|success|error\",\"result\":\"执行结果\"}"
- * }
- * </pre>
- * <b>前端区分方式：</b>
- * <ul>
- *   <li>对话内容：event="content"</li>
- *   <li>MCP 事件：event="mcp"</li>
- * </ul>
+ * 监听 MCP 工具执行事件，通过 SSE 推送到前端。
+ * 支持用户二次确认：AI 调用工具前推送确认事件，等待用户同意后才执行。
  *
  * @author evo
  */
@@ -40,6 +31,20 @@ import java.util.Map;
 public class MyMcpClientListener implements McpClientListener {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    /** 静态 holder，由 Spring 启动时注入 */
+    @Setter
+    private static ToolConfirmationManager confirmationManager;
+
+    /** 需要用户二次确认的工具名称列表 */
+    private static final Set<String> CONFIRM_REQUIRED_TOOLS = Set.of(
+        "execute_sql",
+        "edit_file",
+        "delete_file",
+        "write_file",
+        "batchLoadTools",
+        "remove"
+    );
 
     private final Long userId;
 
@@ -52,23 +57,35 @@ public class MyMcpClientListener implements McpClientListener {
     }
 
     // ==================== 工具执行 ====================
+
     @Override
     public void beforeExecuteTool(McpCallContext context) {
-        if (context.message() instanceof McpCallToolRequest request) {
-            String name = (String) request.getParams().get("name");
-            log.info("工具调用之前：{}", name);
-            pushMcpEvent(name, "pending", null);
+        if (!(context.message() instanceof McpCallToolRequest request)) return;
+        String name = (String) request.getParams().get("name");
+        log.info("工具调用之前：{}", name);
+        pushMcpEvent(name, "pending", null);
+
+        // 用户二次确认（仅针对特定工具）
+        if (confirmationManager != null && userId != null && CONFIRM_REQUIRED_TOOLS.contains(name)) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> args = (Map<String, Object>) request.getParams().get("arguments");
+            String confirmId = confirmationManager.createConfirmation(userId, name, args);
+            boolean approved = confirmationManager.waitForConfirmation(confirmId);
+            if (!approved) {
+                log.info("用户拒绝工具调用: {}", name);
+                return;
+            }
+            log.info("用户同意工具调用: {}", name);
         }
     }
 
     @Override
     public void afterExecuteTool(McpCallContext context, ToolExecutionResult result, Map<String, Object> rawResult) {
-        if (context.message() instanceof McpCallToolRequest request) {
-            String name = (String) request.getParams().get("name");
-            String resultText = result != null ? result.toString() : "";
-            log.info("工具调用之后：{},返回结果{}", name, result);
-            pushMcpEvent(name, "success", truncate(resultText, 500));
-        }
+        if (!(context.message() instanceof McpCallToolRequest request)) return;
+        String name = (String) request.getParams().get("name");
+        String resultText = result != null ? result.toString() : "";
+        log.info("工具调用之后：{}, 返回结果 {}", name, result);
+        pushMcpEvent(name, "success", truncate(resultText, 500));
     }
 
     @Override
@@ -137,10 +154,7 @@ public class MyMcpClientListener implements McpClientListener {
         }
     }
 
-    /**
-     * 推送 MCP 事件到前端
-     */
-    private void pushMcpEvent(String name, String status, String result) {
+    protected void pushMcpEvent(String name, String status, String result) {
         if (userId == null) {
             log.warn("userId 为空，无法推送 MCP 事件");
             return;

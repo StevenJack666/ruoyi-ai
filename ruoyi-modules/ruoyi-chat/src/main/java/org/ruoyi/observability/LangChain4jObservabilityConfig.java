@@ -9,6 +9,7 @@ import dev.langchain4j.observability.api.listener.*;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.ruoyi.mcp.service.core.ToolConfirmationManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -32,6 +33,7 @@ import java.util.List;
 public class LangChain4jObservabilityConfig {
 
     private final AiServiceListenerRegistrar registrar = AiServiceListenerRegistrar.newInstance();
+    private final ToolConfirmationManager confirmationManager;
 
     /**
      * 注册 AI 服务级别的事件监听器
@@ -124,6 +126,8 @@ public class LangChain4jObservabilityConfig {
 
     @Bean
     public McpClientListener mcpClientListener() {
-        return new MyMcpClientListener();
+        MyMcpClientListener listener = new MyMcpClientListener();
+        MyMcpClientListener.setConfirmationManager(confirmationManager);
+        return listener;
     }
 }

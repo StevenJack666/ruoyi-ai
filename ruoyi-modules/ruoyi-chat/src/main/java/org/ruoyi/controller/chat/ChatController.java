@@ -7,14 +7,15 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
+import org.ruoyi.common.core.domain.R;
+import org.ruoyi.domain.dto.ToolConfirmRequest;
+import org.ruoyi.mcp.service.core.ToolConfirmationManager;
 import org.ruoyi.service.chat.impl.ChatServiceFacade;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import org.ruoyi.common.core.domain.R;
 
 
 /**
@@ -31,6 +32,7 @@ import org.ruoyi.common.core.domain.R;
 public class ChatController {
 
     private final ChatServiceFacade chatService;
+    private final ToolConfirmationManager toolConfirmationManager;
 
     /**
      * 会话文档上传（仅本次对话有效，Redis缓存，30分钟过期）
@@ -53,6 +55,19 @@ public class ChatController {
     @ResponseBody
     public SseEmitter sseChat(@RequestBody @Valid ChatRequest chatRequest) {
         return chatService.sseChat(chatRequest);
+    }
+
+
+    /**
+     * 工具调用确认/拒绝
+     */
+    @Operation(summary = "工具调用确认", description = "用户同意或拒绝 AI 的工具调用请求")
+    @PostMapping("/tool-confirm")
+    @ResponseBody
+    public R<Void> toolConfirm(@RequestBody ToolConfirmRequest request) {
+        boolean success = toolConfirmationManager.respond(request.getConfirmId(), request.isApproved());
+        log.info("用户{}工具调用: confirmId={}", request.isApproved() ? "同意" : "拒绝", request.getConfirmId());
+        return success ? R.ok() : R.fail("确认请求不存在或已过期");
     }
 
 }
