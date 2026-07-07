@@ -3,6 +3,7 @@ package org.ruoyi.common.chat.service.chat;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import jakarta.validation.Valid;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
+import org.ruoyi.common.chat.domain.dto.vulnerabilities.OpenApiChatRequest;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -31,4 +32,8 @@ public interface IChatService {
      */
     void chat(@Valid ChatRequest chatRequest, StreamingChatResponseHandler externalHandler);
 
+    /**
+     * 提供外部接口对话（OpenApi）
+     */
+    Object openChat(@Valid OpenApiChatRequest openApiChatRequest);
 }

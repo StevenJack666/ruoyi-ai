@@ -3484,3 +3484,28 @@ INSERT INTO `test_tree` VALUES (12, '000000', 10, 108, 3, '子节点88', 0, 103,
 INSERT INTO `test_tree` VALUES (13, '000000', 10, 108, 3, '子节点99', 0, 103, '2026-02-03 05:14:54', 1, NULL, NULL, 0);
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- ----------------------------
+-- Table structure for session_message_file_rel
+-- ----------------------------
+DROP TABLE IF EXISTS `session_message_file_rel`;
+CREATE TABLE `session_message_file_rel`  (
+                                             `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+                                             `message_id` bigint(20) NULL DEFAULT NULL COMMENT '对话消息ID',
+                                             `session_id` bigint(20) NULL DEFAULT NULL COMMENT '消息ID',
+                                             `oss_file_id` bigint(20) NULL DEFAULT NULL COMMENT '文件ID',
+                                             `create_time` datetime NULL DEFAULT NULL COMMENT '创建时间',
+                                             `update_time` datetime NULL DEFAULT NULL COMMENT '更新时间',
+                                             `create_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '创建者',
+                                             `update_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '更新者',
+                                             `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '备注',
+                                             `is_deleted` tinyint(1) NULL DEFAULT 0 COMMENT '是否删除（0：未删除，1：已删除）',
+                                             PRIMARY KEY (`id`) USING BTREE,
+                                             INDEX `idx_message_id`(`message_id` ASC) USING BTREE,
+                                             INDEX `idx_oss_file_id`(`oss_file_id` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 2070449697850568707 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci COMMENT = '会话消息文件关联表' ROW_FORMAT = Dynamic;
+
+INSERT INTO `ruoyi-ai-agent`.`sys_user` (`user_id`, `tenant_id`, `dept_id`, `user_name`, `nick_name`, `user_type`, `email`, `phonenumber`, `sex`, `avatar`, `password`, `status`, `del_flag`, `login_ip`, `login_date`, `create_dept`, `create_by`, `create_time`, `update_by`, `update_time`, `remark`, `open_id`, `user_balance`) VALUES (5, '000000', 103, 'openapi', 'openApiUser（固化角色）', 'sys_user', '', '', '0', NULL, '', '0', '0', '', NULL, 103, NULL, '2026-07-07 16:36:25', NULL, NULL, 'openApi固化角色', NULL, 0.00);
+INSERT INTO `ruoyi-ai-agent`.`sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`, `config_value`, `config_type`, `create_dept`, `create_by`, `create_time`, `update_by`, `update_time`, `remark`) VALUES (2074417562781937666, '000000', '情报分类会话ID', 'intelClassify.sessionId', '100', 'N', 103, 1, '2026-07-07 16:57:42', 1, '2026-07-07 16:57:42', NULL);
+INSERT INTO `ruoyi-ai-agent`.`sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`, `config_value`, `config_type`, `create_dept`, `create_by`, `create_time`, `update_by`, `update_time`, `remark`) VALUES (2074417653013999617, '000000', '风险研判会话ID', 'riskJudge.sessionId', '101', 'N', 103, 1, '2026-07-07 16:58:04', 1, '2026-07-07 16:58:04', NULL);
+INSERT INTO `ruoyi-ai-agent`.`sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`, `config_value`, `config_type`, `create_dept`, `create_by`, `create_time`, `update_by`, `update_time`, `remark`) VALUES (2074421611300319233, '000000', 'openapi默认模型名称', 'openapi.default.model', 'qwen-plus', 'N', 103, 1, '2026-07-07 17:13:48', 1, '2026-07-07 17:13:48', NULL);

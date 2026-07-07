@@ -12,6 +12,7 @@ import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.transport.McpTransport;
 import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
@@ -40,6 +41,7 @@ import org.ruoyi.common.chat.base.ThreadContext;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.chat.domain.dto.request.ReSumeRunner;
 import org.ruoyi.common.chat.domain.dto.request.WorkFlowRunner;
+import org.ruoyi.common.chat.domain.dto.vulnerabilities.OpenApiChatRequest;
 import org.ruoyi.common.chat.domain.vo.chat.ChatModelVo;
 import org.ruoyi.common.chat.entity.rel.SessionMessageFileRel;
 import org.ruoyi.common.chat.enums.RoleType;
@@ -62,10 +64,12 @@ import org.ruoyi.domain.bo.vector.QueryVectorBo;
 import org.ruoyi.domain.entity.knowledge.SessionUploadRecord;
 import org.ruoyi.domain.vo.knowledge.KnowledgeInfoVo;
 import org.ruoyi.factory.ChatServiceFactory;
+import org.ruoyi.factory.IntelAnalysisStrategyFactory;
 import org.ruoyi.factory.ResourceLoaderFactory;
 import org.ruoyi.mapper.knowledge.SessionUploadRecordMapper;
 import org.ruoyi.mcp.service.core.ToolProviderFactory;
 import org.ruoyi.observability.*;
+import org.ruoyi.service.IntelAnalysisService;
 import org.ruoyi.service.chat.AbstractChatService;
 import org.ruoyi.service.chat.IChatMessageService;
 import org.ruoyi.service.chat.impl.memory.PersistentChatMemoryStore;
@@ -75,7 +79,9 @@ import org.ruoyi.service.knowledge.TextSplitter;
 import org.ruoyi.service.retrieval.KnowledgeRetrievalService;
 import org.ruoyi.service.knowledge.retriever.CustomVectorRetriever;
 import org.ruoyi.service.vector.VectorStoreService;
+import org.ruoyi.system.domain.vo.SysUserVo;
 import org.ruoyi.system.service.ISysConfigService;
+import org.ruoyi.system.service.ISysUserService;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -139,13 +145,25 @@ public class ChatServiceFacade implements IChatService {
     private final TextSplitter textSplitter;                       // 分块用（CharacterTextSplitter）
     // ChatServiceFacade 加两个依赖
     private final UploadServiceFactory uploadServiceFactory;                 // OSS上传
-    private final SessionUploadRecordMapper recordMapper;       // 记录写入
+    private final SessionUploadRecordMapper recordMapper;// 记录写入
+    private final IntelAnalysisStrategyFactory intelAnalysisStrategyFactory;
+    private final ISysUserService sysUserService;
 
     /**
      * 内存实例缓存，避免同一会话重复创建
      * Key: sessionId, Value: MessageWindowChatMemory实例
      */
     private static final Map<Object, MessageWindowChatMemory> memoryCache = new ConcurrentHashMap<>();
+
+    /**
+     * 固化角色（openapi）
+     */
+    private static final String OPEN_API_USER_NAME = "openapi";
+
+    /**
+     * 默认模型名称（openapi）
+     */
+    private static final String OPEN_API_DEFAULT_MODEL = "openapi.default.model";
 
     // ChatServiceFacade.java
     // todo 文件上传
@@ -529,6 +547,43 @@ public class ChatServiceFacade implements IChatService {
         // 7. 发起对话
         StreamingChatModel streamingChatModel = chatService.buildStreamingChatModel(chatModelVo, chatRequest);
         streamingChatModel.chat(chatRequest.getContent(), combinedHandler);
+    }
+
+    /**
+     * 调用研判或分类LLM大模型接口
+     */
+    @Override
+    public Object openChat(OpenApiChatRequest openApiChatRequest) {
+        // 1. 从参数配置获取模型
+        String model = sysConfigService.selectConfigByKey(OPEN_API_DEFAULT_MODEL);
+        if (StringUtils.isEmpty(model)){
+            throw new ServiceException("未配置OpenApi默认模型名称");
+        }
+        // 2. 获取模型属性
+        ChatModelVo chatModelVo = chatModelService.selectModelByName(model);
+        if (chatModelVo == null) {
+            throw new IllegalArgumentException("模型不存在: " + model);
+        }
+
+        // 3. 路由服务提供商
+        String providerCode = chatModelVo.getProviderCode();
+        log.info("跨模块调用 - 路由到服务提供商: {}, 模型: {}", providerCode, model);
+        AbstractChatService chatService = chatServiceFactory.getOriginalService(providerCode);
+        ChatModel chatModel = chatService.buildChatModel(chatModelVo);
+
+        // 4. 获取操作
+        IntelAnalysisService intelAnalysisService = intelAnalysisStrategyFactory.getOriginalService(openApiChatRequest.getScene());
+        // 5. 查询固化角色
+        SysUserVo openApiUser = sysUserService.selectUserByUserName(OPEN_API_USER_NAME);
+        if (null == openApiUser){
+            throw new ServiceException("openApi 固化角色不存在无法操作！");
+        }
+        // 6. 保存用户消息
+        chatMessageService.saveChatMessage(openApiUser.getUserId(), intelAnalysisService.getSessionId(),
+            openApiChatRequest.getContent(), RoleType.USER.getName(), model);
+
+        // 7. 调用大模型返回对应操作
+        return intelAnalysisService.analyze(openApiChatRequest.getContent(), model, openApiUser.getUserId(), chatModel);
     }
 
     /**
