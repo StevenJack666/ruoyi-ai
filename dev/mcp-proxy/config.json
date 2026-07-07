@@ -1,0 +1,23 @@
+{
+  "groups": {
+    "system": {
+      "auth": {"type": "bearer", "token": "eyJhbGciOiJIUzI1NiJ9.xxx"},
+      "tools": [
+        {"name":"get_users","server":"192.168.1.100:8080","method":"GET","path":"/api/users","params":{"pageNum":"页码","pageSize":"每页条数"}},
+        {"name":"get_user","server":"192.168.1.100:8080","method":"GET","path":"/api/users/{id}","params":{"id":"用户ID"}}
+      ]
+    },
+    "order": {
+      "auth": {"type": "bearer", "token": "eyJhbGciOiJIUzI1NiJ9.yyy"},
+      "tools": [
+        {"name":"get_orders","server":"192.168.1.101:8080","method":"GET","path":"/api/orders","params":{"pageNum":"页码"}}
+      ]
+    },
+    "wechat": {
+      "auth": {"type": "custom", "name": "AppId", "value": "wx_xxxxx"},
+      "tools": [
+        {"name":"send_msg","server":"192.168.1.102:8080","method":"POST","path":"/api/send","params":{"__body":"消息JSON"}}
+      ]
+    }
+  }
+}

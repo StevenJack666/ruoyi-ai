@@ -1,0 +1,108 @@
+{
+  "server_name": "ruoyi-http-mcp-proxy",
+  "server_version": "1.0.0",
+  "base_url": "http://localhost:6039",
+  "tools": [
+    {
+      "tool_name": "system_model__system_model_list",
+      "class_name": "ChatModelController",
+      "http_method": "GET",
+      "http_path": "/system/model/list",
+      "description": "查询模型管理列表 | GET /system/model/list",
+      "path_params": [],
+      "query_params": [],
+      "body_param": null
+    },
+    {
+      "tool_name": "system_provider__system_provider_list",
+      "class_name": "ChatProviderController",
+      "http_method": "GET",
+      "http_path": "/system/provider/list",
+      "description": "查询厂商管理列表 | GET /system/provider/list",
+      "path_params": [],
+      "query_params": [],
+      "body_param": null
+    },
+    {
+      "tool_name": "system_session__system_session_list",
+      "class_name": "ChatSessionController",
+      "http_method": "GET",
+      "http_path": "/system/session/list",
+      "description": "查询会话管理列表 | GET /system/session/list",
+      "path_params": [],
+      "query_params": [],
+      "body_param": null
+    },
+    {
+      "tool_name": "chat__chat_upload",
+      "class_name": "ChatController",
+      "http_method": "POST",
+      "http_path": "/chat/upload",
+      "description": "会话文档上传（仅本次对话有效，Redis缓存，30分钟过期） | POST /chat/upload",
+      "path_params": [],
+      "query_params": [],
+      "body_param": null
+    },
+    {
+      "tool_name": "system_message__system_message_list",
+      "class_name": "ChatMessageController",
+      "http_method": "GET",
+      "http_path": "/system/message/list",
+      "description": "查询聊天消息列表 | GET /system/message/list",
+      "path_params": [],
+      "query_params": [],
+      "body_param": null
+    },
+    {
+      "tool_name": "mcp_tool__mcp_tool_list",
+      "class_name": "McpToolController",
+      "http_method": "GET",
+      "http_path": "/mcp/tool/list",
+      "description": "查询 MCP 工具列表 | GET /mcp/tool/list",
+      "path_params": [],
+      "query_params": [],
+      "body_param": null
+    },
+    {
+      "tool_name": "mcp_market__mcp_market_list",
+      "class_name": "McpMarketController",
+      "http_method": "GET",
+      "http_path": "/mcp/market/list",
+      "description": "查询市场列表 | GET /mcp/market/list",
+      "path_params": [],
+      "query_params": [],
+      "body_param": null
+    },
+    {
+      "tool_name": "system_attach__system_attach_list",
+      "class_name": "KnowledgeAttachController",
+      "http_method": "GET",
+      "http_path": "/system/attach/list",
+      "description": "查询知识库附件列表 | GET /system/attach/list",
+      "path_params": [],
+      "query_params": [],
+      "body_param": null
+    },
+    {
+      "tool_name": "system_fragment__system_fragment_list",
+      "class_name": "KnowledgeFragmentController",
+      "http_method": "GET",
+      "http_path": "/system/fragment/list",
+      "description": "查询知识片段列表 | GET /system/fragment/list | Body: bo",
+      "path_params": [],
+      "query_params": [],
+      "body_param": "bo"
+    },
+    {
+      "tool_name": "system_info__system_info_list",
+      "class_name": "KnowledgeInfoController",
+      "http_method": "GET",
+      "http_path": "/system/info/list",
+      "description": "查询知识库列表 | GET /system/info/list",
+      "path_params": [],
+      "query_params": [],
+      "body_param": null
+    }
+  ],
+  "total_tools": 10
+}
