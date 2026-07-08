@@ -1,8 +1,9 @@
-package org.ruoyi.common.chat.domain.dto.vulnerabilities;
+package org.ruoyi.common.chat.domain.dto.request;
 
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -17,9 +18,9 @@ public class OpenApiChatRequest {
     @NotEmpty(message = "场景不能为空")
     private String scene;
 
-    // 输入的情报内容
-    @NotEmpty(message = "内容不能为空")
-    private String content;
+    // 输入的情报内容列表
+    @NotEmpty(message = "内容列表不能为空")
+    private List<String> contentList;
 
     // 其他上下文参数（可选）
     private Map<String, Object> context;

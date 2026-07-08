@@ -1,6 +1,7 @@
 package org.ruoyi.service.impl;
 
-import org.ruoyi.common.chat.domain.dto.vulnerabilities.OpenApiChatRequest;
+import org.ruoyi.common.chat.domain.dto.request.OpenApiChatRequest;
+import org.ruoyi.common.chat.domain.response.OpenApiResponse;
 import org.ruoyi.common.chat.service.chat.IChatService;
 import org.ruoyi.service.OpenApiService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +19,7 @@ public class OpenApiServiceImpl implements OpenApiService {
      * @return
      */
     @Override
-    public Object openChat(OpenApiChatRequest chatRequest) {
+    public OpenApiResponse openChat(OpenApiChatRequest chatRequest) {
         return chatService.openChat(chatRequest);
     }
 }

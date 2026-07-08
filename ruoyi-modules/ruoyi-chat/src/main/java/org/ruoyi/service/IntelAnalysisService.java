@@ -1,6 +1,7 @@
 package org.ruoyi.service;
 
 
+import com.alibaba.fastjson.JSONObject;
 import dev.langchain4j.model.chat.ChatModel;
 
 /**
@@ -14,6 +15,6 @@ public interface IntelAnalysisService {
     // 执行分析逻辑
     Object analyze(String content, String model, Long userId, ChatModel chatModel);
 
-    // 获取会话ID
-    Long getSessionId();
+    // 获取会话配置（包含SessionId、title、content）
+    JSONObject getSessionConfig();
 }

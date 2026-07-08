@@ -1,6 +1,7 @@
 package org.ruoyi.service.chat.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.alibaba.fastjson.JSONObject;
 import dev.langchain4j.agentic.AgenticServices;
 import dev.langchain4j.agentic.supervisor.SupervisorAgent;
 import dev.langchain4j.agentic.supervisor.SupervisorResponseStrategy;
@@ -41,7 +42,7 @@ import org.ruoyi.common.chat.base.ThreadContext;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.chat.domain.dto.request.ReSumeRunner;
 import org.ruoyi.common.chat.domain.dto.request.WorkFlowRunner;
-import org.ruoyi.common.chat.domain.dto.vulnerabilities.OpenApiChatRequest;
+import org.ruoyi.common.chat.domain.dto.request.OpenApiChatRequest;
 import org.ruoyi.common.chat.domain.vo.chat.ChatModelVo;
 import org.ruoyi.common.chat.entity.rel.SessionMessageFileRel;
 import org.ruoyi.common.chat.enums.RoleType;
@@ -60,8 +61,11 @@ import org.ruoyi.common.redis.utils.RedisUtils;
 import org.ruoyi.common.satoken.utils.LoginHelper;
 import org.ruoyi.common.sse.core.SseEmitterManager;
 import org.ruoyi.common.sse.utils.SseMessageUtils;
+import org.ruoyi.domain.bo.chat.ChatSessionBo;
 import org.ruoyi.domain.bo.vector.QueryVectorBo;
+import org.ruoyi.common.chat.domain.response.OpenApiResponse;
 import org.ruoyi.domain.entity.knowledge.SessionUploadRecord;
+import org.ruoyi.domain.vo.chat.ChatSessionVo;
 import org.ruoyi.domain.vo.knowledge.KnowledgeInfoVo;
 import org.ruoyi.factory.ChatServiceFactory;
 import org.ruoyi.factory.IntelAnalysisStrategyFactory;
@@ -72,6 +76,7 @@ import org.ruoyi.observability.*;
 import org.ruoyi.service.IntelAnalysisService;
 import org.ruoyi.service.chat.AbstractChatService;
 import org.ruoyi.service.chat.IChatMessageService;
+import org.ruoyi.service.chat.IChatSessionService;
 import org.ruoyi.service.chat.impl.memory.PersistentChatMemoryStore;
 import org.ruoyi.service.knowledge.IKnowledgeInfoService;
 import org.ruoyi.service.knowledge.ResourceLoader;
@@ -148,6 +153,7 @@ public class ChatServiceFacade implements IChatService {
     private final SessionUploadRecordMapper recordMapper;// 记录写入
     private final IntelAnalysisStrategyFactory intelAnalysisStrategyFactory;
     private final ISysUserService sysUserService;
+    private final IChatSessionService chatSessionService;
 
     /**
      * 内存实例缓存，避免同一会话重复创建
@@ -553,7 +559,7 @@ public class ChatServiceFacade implements IChatService {
      * 调用研判或分类LLM大模型接口
      */
     @Override
-    public Object openChat(OpenApiChatRequest openApiChatRequest) {
+    public OpenApiResponse openChat(OpenApiChatRequest openApiChatRequest) {
         // 1. 从参数配置获取模型
         String model = sysConfigService.selectConfigByKey(OPEN_API_DEFAULT_MODEL);
         if (StringUtils.isEmpty(model)){
@@ -578,12 +584,23 @@ public class ChatServiceFacade implements IChatService {
         if (null == openApiUser){
             throw new ServiceException("openApi 固化角色不存在无法操作！");
         }
-        // 6. 保存用户消息
-        chatMessageService.saveChatMessage(openApiUser.getUserId(), intelAnalysisService.getSessionId(),
-            openApiChatRequest.getContent(), RoleType.USER.getName(), model);
-
-        // 7. 调用大模型返回对应操作
-        return intelAnalysisService.analyze(openApiChatRequest.getContent(), model, openApiUser.getUserId(), chatModel);
+        // 6. 保存会话
+        JSONObject sessionConfig = intelAnalysisService.getSessionConfig();
+        Long sessionId = sessionConfig.getLong("sessionId");
+        Long userId = openApiUser.getUserId();
+        saveChatSession(userId, sessionId, sessionConfig);
+        // 获取内容列表
+        List<String> contentList = openApiChatRequest.getContentList();
+        List<Object> result = new ArrayList<>();
+        // 循环获取LLM解析结果
+        contentList.forEach(content -> {
+            // 7. 保存用户消息
+            chatMessageService.saveChatMessage(userId, sessionId,
+                content, RoleType.USER.getName(), model);
+            // 8. 调用大模型返回对应操作
+            result.add(intelAnalysisService.analyze(content, model, userId, chatModel));
+        });
+        return new OpenApiResponse(result);
     }
 
     /**
@@ -592,6 +609,26 @@ public class ChatServiceFacade implements IChatService {
     @Override
     public SseEmitter chat(ChatRequest chatRequest) {
         return sseChat(chatRequest);
+    }
+
+    /**
+     * 保存会话管理
+     * @param userId 用户ID
+     * @param sessionId 消息ID
+     */
+    private void saveChatSession(Long userId, Long sessionId, JSONObject sessionConfig){
+        // 判断会话消息是否存在（存在则跳过）
+        ChatSessionVo chatSessionVo = chatSessionService.queryById(sessionId);
+        if (chatSessionVo != null){
+            return;
+        }
+        // 获取配置内容保存
+        ChatSessionBo chatSessionBo = new ChatSessionBo();
+        chatSessionBo.setId(sessionId);
+        chatSessionBo.setUserId(userId);
+        chatSessionBo.setSessionContent(sessionConfig.getString("sessionContent"));
+        chatSessionBo.setSessionTitle(sessionConfig.getString("sessionTitle"));
+        chatSessionService.insertByBo(chatSessionBo);
     }
 
 

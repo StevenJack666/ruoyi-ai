@@ -24,7 +24,7 @@ public class RiskJudgeStrategyImpl extends AbstractIntelAnalysisService<RiskJudg
 
     @Override
     public String getSessionConfigKey() {
-        return "riskJudge.sessionId";
+        return "riskJudge.session.config";
     }
 
     @Override

@@ -23,7 +23,7 @@ public class ClassifyStrategyImpl extends AbstractIntelAnalysisService<ClassifyR
 
     @Override
     public String getSessionConfigKey() {
-        return "intelClassify.sessionId";
+        return "intelClassify.session.config";
     }
 
     @Override

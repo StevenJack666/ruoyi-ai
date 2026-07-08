@@ -1,6 +1,7 @@
 package org.ruoyi.service;
 
-import org.ruoyi.common.chat.domain.dto.vulnerabilities.OpenApiChatRequest;
+import org.ruoyi.common.chat.domain.dto.request.OpenApiChatRequest;
+import org.ruoyi.common.chat.domain.response.OpenApiResponse;
 
 public interface OpenApiService {
     /**
@@ -8,5 +9,5 @@ public interface OpenApiService {
      * @param chatRequest
      * @return
      */
-    Object openChat(OpenApiChatRequest chatRequest);
+    OpenApiResponse openChat(OpenApiChatRequest chatRequest);
 }
