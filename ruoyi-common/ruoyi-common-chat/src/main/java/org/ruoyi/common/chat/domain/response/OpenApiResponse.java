@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
-import java.util.List;
+import java.util.Map;
 
 /**
  * 返回相应对象
@@ -17,5 +17,5 @@ public class OpenApiResponse {
     /**
      * 内容信息
      */
-    List<Object> result;
+    Map<String, Object> result;
 }

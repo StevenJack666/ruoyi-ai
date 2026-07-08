@@ -1,6 +1,7 @@
 package org.ruoyi.service.chat.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import dev.langchain4j.agentic.AgenticServices;
 import dev.langchain4j.agentic.supervisor.SupervisorAgent;
@@ -30,6 +31,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 
+import org.jetbrains.annotations.NotNull;
 import org.ruoyi.agent.ChartGenerationAgent;
 import org.ruoyi.agent.EchartsAgent;
 import org.ruoyi.agent.SkillsAgent;
@@ -94,9 +96,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.ByteArrayInputStream;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import cn.hutool.core.collection.CollUtil;
@@ -104,9 +104,6 @@ import org.ruoyi.common.core.exception.ServiceException;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Set;
 import java.util.stream.Collectors;
 /**
  * 聊天服务门面层
@@ -584,23 +581,49 @@ public class ChatServiceFacade implements IChatService {
         if (null == openApiUser){
             throw new ServiceException("openApi 固化角色不存在无法操作！");
         }
+
         // 6. 保存会话
         JSONObject sessionConfig = intelAnalysisService.getSessionConfig();
         Long sessionId = sessionConfig.getLong("sessionId");
         Long userId = openApiUser.getUserId();
         saveChatSession(userId, sessionId, sessionConfig);
-        // 获取内容列表
+
+        // 7. 生成结果
+        return new OpenApiResponse(getResultMap(openApiChatRequest, userId, sessionId, model, intelAnalysisService, chatModel));
+    }
+
+    /**
+     * 获取返回列表结果
+     */
+    private @NotNull Map<String, Object> getResultMap(OpenApiChatRequest openApiChatRequest,
+                                                      Long userId, Long sessionId, String model,
+                                                      IntelAnalysisService intelAnalysisService,
+                                                      ChatModel chatModel) {
         List<String> contentList = openApiChatRequest.getContentList();
-        List<Object> result = new ArrayList<>();
-        // 循环获取LLM解析结果
+        Map<String, Object> resultMap = new HashMap<>();
+
         contentList.forEach(content -> {
             // 7. 保存用户消息
-            chatMessageService.saveChatMessage(userId, sessionId,
-                content, RoleType.USER.getName(), model);
+            chatMessageService.saveChatMessage(userId, sessionId, content, RoleType.USER.getName(), model);
             // 8. 调用大模型返回对应操作
-            result.add(intelAnalysisService.analyze(content, model, userId, chatModel));
+            Object analyzeResult = intelAnalysisService.analyze(content, model, userId, chatModel);
+            // 9. 解析【原始字符串 content】，提取 informationId 作为 key
+            if (StringUtils.isNotBlank(content)) {
+                try {
+                    // 直接将原始字符串 content 解析为 JSONObject
+                    JSONObject jsonObject = JSON.parseObject(content);
+                    String informationId = jsonObject.getString("id");
+                    // 防止 informationId 为空导致 Map 报错
+                    if (StringUtils.isNotBlank(informationId) && analyzeResult != null) {
+                        resultMap.put(informationId, analyzeResult);
+                    }
+                } catch (Exception e) {
+                    // 防御性编程：如果 content 不是合法的 JSON，记录日志并跳过，防止整个接口崩溃
+                    log.warn("解析原始 content 失败，原始数据: {}", content, e);
+                }
+            }
         });
-        return new OpenApiResponse(result);
+        return resultMap;
     }
 
     /**

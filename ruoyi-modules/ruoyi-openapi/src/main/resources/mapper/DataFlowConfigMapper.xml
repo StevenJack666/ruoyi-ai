@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.ruoyi.support.mapper.DataFlowConfigMapper">
+
+    <resultMap id="DataFlowConfigResult" type="org.ruoyi.support.domain.DataFlowConfig">
+        <result property="id"    column="id"    />
+        <result property="appId"    column="app_id"    />
+        <result property="resourceUri"    column="resource_uri"    />
+        <result property="permitsPer"    column="permits_per"    />
+        <result property="waitTimeout"    column="wait_timeout"    />
+        <result property="enableFlag"    column="enable_flag"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="isDeleted"    column="is_deleted"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectDataFlowConfigVo">
+        select id,
+               app_id,
+               resource_uri,
+               permits_per,
+               wait_timeout,
+               enable_flag,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               is_deleted,
+               remark
+        from rds_data_flow_config
+    </sql>
+
+    <select id="selectDataFlowConfigById" parameterType="Long" resultMap="DataFlowConfigResult">
+        <include refid="selectDataFlowConfigVo"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectDataFlowConfigByIds" parameterType="Long" resultMap="DataFlowConfigResult">
+        <include refid="selectDataFlowConfigVo"/>
+        where id in
+        <foreach item="ids" collection="array" open="(" separator="," close=")">
+            #{ids}
+        </foreach>
+    </select>
+
+    <select id="selectDataFlowConfigList" parameterType="org.ruoyi.support.domain.DataFlowConfig" resultMap="DataFlowConfigResult">
+        <include refid="selectDataFlowConfigVo"/>
+        <where>
+            <if test="appId != null  and appId != ''"> and app_id = #{appId}</if>
+            <if test="enableFlag != null  and enableFlag != ''">and enable_flag = #{enableFlag}</if>
+            <if test="isDeleted != null  and isDeleted != ''"> and is_deleted = #{isDeleted}</if>
+            <if test="resourceUri != null  and resourceUri != ''"> and resource_uri like concat('%',concat(#{resourceUri}, '%'))</if>
+            <if test="remark != null  and remark != ''">and remark like concat('%',concat(#{remark}, '%'))</if>
+            <if test="params.filterStartUpdateTime != null and params.filterStartUpdateTime != ''"> and update_time <![CDATA[ >= ]]> #{params.filterStartUpdateTime}</if>
+            <if test="params.filterEndUpdateTime != null and params.filterEndUpdateTime != ''"> and update_time <![CDATA[ <= ]]> #{params.filterEndUpdateTime}</if>
+        </where>
+        <if test="params.orderBy == null  or params.orderBy == ''">
+            order by app_id asc ,id asc
+        </if>
+    </select>
+
+    <insert id="insert" parameterType="org.ruoyi.support.domain.DataFlowConfig" useGeneratedKeys="true" keyProperty="id">
+        insert into rds_data_flow_config
+        (
+            app_id,
+            resource_uri,
+            permits_per,
+            wait_timeout,
+            enable_flag,
+            create_by,
+            create_time,
+            update_by,
+            update_time,
+            is_deleted,
+            remark
+        ) values
+        (
+            #{appId},
+            #{resourceUri},
+            #{permitsPer},
+            #{waitTimeout},
+            #{enableFlag},
+            #{createBy},
+            NOW(),
+            #{updateBy},
+            NOW(),
+            #{isDeleted},
+            #{remark}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="org.ruoyi.support.domain.DataFlowConfig">
+        update rds_data_flow_config set
+            app_id = #{appId},
+            resource_uri = #{resourceUri},
+            permits_per = #{permitsPer},
+            wait_timeout = #{waitTimeout},
+            enable_flag = #{enableFlag},
+            is_deleted = #{isDeleted},
+            update_by = #{updateBy},
+            update_time = NOW(),
+            remark = #{remark}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteDataFlowConfigById" parameterType="Long">
+        delete from rds_data_flow_config where id = #{id}
+    </delete>
+
+    <delete id="deleteDataFlowConfigByIds" parameterType="String">
+        delete from rds_data_flow_config where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectLoadCacheList" parameterType="org.ruoyi.support.domain.DataFlowConfig" resultMap="DataFlowConfigResult">
+        <include refid="selectDataFlowConfigVo"/>
+        <where>
+            <if test="appId != null  and appId != ''">and app_id = #{appId}</if>
+            <if test="enableFlag != null  and enableFlag != ''">and enable_flag = #{enableFlag}</if>
+            <if test="isDeleted != null  and isDeleted != ''">and is_deleted = #{isDeleted}</if>
+        </where>
+        order by id asc
+    </select>
+
+    <update id="updateEnableFlagById" parameterType="org.ruoyi.support.domain.DataFlowConfig">
+        update rds_data_flow_config set
+             enable_flag = #{enableFlag},
+             update_by = #{updateBy},
+             update_time = NOW()
+        where id = #{id}
+    </update>
+</mapper>

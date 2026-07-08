@@ -1,5 +1,6 @@
 package org.ruoyi.openapi.controller;
 
+import cn.dev33.satoken.annotation.SaIgnore;
 import jakarta.validation.Valid;
 import org.ruoyi.common.chat.domain.dto.request.OpenApiChatRequest;
 import org.ruoyi.service.OpenApiService;
@@ -22,7 +23,7 @@ public class OpenApiController {
     private OpenApiService openApiService;
 
     /**
-     * 调用内部对话接口 TODO 流控
+     * 调用内部对话接口
      */
     @PostMapping("/chat")
     public R<?> chat(@RequestBody @Valid OpenApiChatRequest chatRequest) {
