@@ -5,3 +5,20 @@ INSERT INTO `ruoyi-ai-agent`.`sys_user` (`user_id`, `tenant_id`, `dept_id`, `use
 
 UPDATE `ruoyi-ai-agent`.`sys_config` SET `tenant_id` = '000000', `config_name` = '情报分类会话配置', `config_key` = 'intelClassify.session.config', `config_value` = '{\n    \"sessionId\":101,\n    \"sessionContent\":\"情报分类\",\n    \"sessionTitle\":\"情报分类\"\n}', `config_type` = 'N', `create_dept` = 103, `create_by` = 1, `create_time` = '2026-07-07 16:57:42', `update_by` = 1, `update_time` = '2026-07-08 14:48:20', `remark` = NULL WHERE `config_id` = 2074417562781937666;
 UPDATE `ruoyi-ai-agent`.`sys_config` SET `tenant_id` = '000000', `config_name` = '风险研判会话配置', `config_key` = 'riskJudge.session.config', `config_value` = '{\n    \"sessionId\":100,\n    \"sessionContent\":\"风险研判\",\n    \"sessionTitle\":\"风险研判\"\n}', `config_type` = 'N', `create_dept` = 103, `create_by` = 1, `create_time` = '2026-07-07 16:58:04', `update_by` = 1, `update_time` = '2026-07-08 14:47:59', `remark` = NULL WHERE `config_id` = 2074417653013999617;
+
+DROP TABLE IF EXISTS `rds_data_flow_config`;
+CREATE TABLE `rds_data_flow_config`  (
+ `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '流控配置ID',
+ `app_id` varchar(64) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '应用ID',
+ `resource_uri` varchar(100) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '请求RUI路径',
+ `permits_per` decimal(20, 2) NULL DEFAULT NULL COMMENT '并发数(每秒)',
+ `wait_timeout` bigint(20) NULL DEFAULT NULL COMMENT '等待时间(毫秒)',
+ `enable_flag` varchar(2) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '是否启用',
+ `create_by` varchar(64) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '创建者',
+ `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+ `update_by` varchar(64) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '更新者',
+ `update_time` datetime NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+ `is_deleted` char(1) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '是否已删除',
+ `remark` varchar(256) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '备注',
+ PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8 COLLATE = utf8_general_ci COMMENT = '暴露面流控配置表' ROW_FORMAT = Dynamic;
