@@ -4,19 +4,25 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.ruoyi.factory.ChatServiceFactory;
+import org.ruoyi.service.chat.AbstractChatService;
+import org.ruoyi.service.chat.impl.provider.ProviderImageDescriber;
 import org.ruoyi.service.knowledge.ResourceLoader;
 import org.ruoyi.service.knowledge.TextSplitter;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFPictureData;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+
 import java.util.ArrayList;
+import java.util.List;
 
 
 @Component
@@ -24,6 +30,15 @@ import java.util.ArrayList;
 @Slf4j
 public class WordLoader implements ResourceLoader {
     private final TextSplitter textSplitter;
+    private final ChatServiceFactory chatServiceFactory;
+
+    private ProviderImageDescriber getImageDescriber() {
+        AbstractChatService service = chatServiceFactory.getOriginalService("multimodal");
+        if (service instanceof ProviderImageDescriber describer) {
+            return describer;
+        }
+        return null;
+    }
 
 
     @Override
@@ -31,7 +46,7 @@ public class WordLoader implements ResourceLoader {
         try {
             XWPFDocument document = new XWPFDocument(inputStream);
             StringBuilder sb = new StringBuilder();
-    
+
             // 遍历文档中的所有元素（段落、表格等）
             for (IBodyElement element : document.getBodyElements()) {
                 switch (element.getElementType()) {
@@ -47,29 +62,72 @@ public class WordLoader implements ResourceLoader {
     }
     
     /**
-     * 段落解析，识别标题层级
+     * 段落解析，识别标题层级和内嵌图片
      */
     private String parseParagraph(XWPFParagraph paragraph) {
+        List<XWPFRun> runs = paragraph.getRuns();
+        if (runs == null || runs.isEmpty()) {
+            String text = paragraph.getText().trim();
+            return text.isEmpty() ? "\n" : text + "\n\n";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        boolean hasImage = false;
+
+        for (XWPFRun run : runs) {
+            List<XWPFPictureData> pictures = run.getEmbeddedPictures();
+            if (pictures != null && !pictures.isEmpty()) {
+                hasImage = true;
+                for (XWPFPictureData pic : pictures) {
+                    String fileName = pic.getFileName();
+                    String suffix = (fileName != null && fileName.contains("."))
+                        ? fileName.substring(fileName.lastIndexOf('.')) : ".png";
+
+                    sb.append("![").append(fileName != null ? fileName : "图片").append("]");
+
+                    try {
+                        byte[] data = pic.getData();
+                        ProviderImageDescriber describer = getImageDescriber();
+                        String description = describer != null
+                            ? describer.describe(data, fileName)
+                            : (fileName != null ? fileName : "图片");
+                        sb.append("![图片描述: ").append(description).append("]");
+                    } catch (Exception e) {
+                        log.warn("图片描述失败: {}, 跳过", fileName, e);
+                        sb.append("![").append(fileName != null ? fileName : "图片").append("]");
+                    }
+                    sb.append("\n\n");
+
+                    log.debug("识别到图片: {} ({} bytes)", fileName,
+                        pic.getData() != null ? pic.getData().length : 0);
+                }
+            } else {
+                String runText = run.getText(0);
+                if (runText != null) {
+                    sb.append(runText);
+                }
+            }
+        }
+
+        if (hasImage) {
+            return sb.toString();
+        }
+
+        // 纯文本段落，走原有标题检测逻辑
         String text = paragraph.getText().trim();
         if (text.isEmpty()) {
             return "\n";
         }
-    
+
         String style = paragraph.getStyle();
-        if (style != null) {
-            // 识别标题样式
-            if (style.contains("Heading")) {
-                int level = extractHeadingLevel(style);
-                String prefix = "#".repeat(level);
-                return prefix + " " + text + "\n\n";
-            }
+        if (style != null && style.contains("Heading")) {
+            int level = extractHeadingLevel(style);
+            return "#".repeat(level) + " " + text + "\n\n";
         }
-        // 通过字号判断是否为标题（备用逻辑）
-        if (paragraph.getRuns().size() > 0) {
-            Integer fontSize = paragraph.getRuns().get(0).getFontSize();
-            if (fontSize != null && fontSize >= 18 && text.length() < 50) {
-                return "## " + text + "\n\n";
-            }
+        if (runs.get(0).getFontSize() != null
+            && runs.get(0).getFontSize() >= 18
+            && text.length() < 50) {
+            return "## " + text + "\n\n";
         }
         return text + "\n\n";
     }
@@ -121,18 +179,7 @@ public class WordLoader implements ResourceLoader {
         }
     }
 
-    // @Override
-    // public String getContent(InputStream inputStream) {
-    //     XWPFDocument document = null;
-    //     try {
-    //         document = new XWPFDocument(inputStream);
-    //         XWPFWordExtractor extractor = new XWPFWordExtractor(document);
-    //         String content = extractor.getText();
-    //         return content;
-    //     } catch (IOException e) {
-    //         throw new RuntimeException(e);
-    //     }
-    // }
+
 
     @Override
     public List<String> getChunkList(String content, String kid) {

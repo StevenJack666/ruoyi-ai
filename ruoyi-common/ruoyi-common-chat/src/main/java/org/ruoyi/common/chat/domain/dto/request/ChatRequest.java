@@ -110,7 +110,7 @@ public class ChatRequest {
     private List<Long> ossIds;
 
     /**
-     * 是否上传文件
+     *  todo 这个应该是一个type枚举类型，后续可能很多类型文件：文档、图片、链接都有
      */
     private Boolean isUploadFile;
 

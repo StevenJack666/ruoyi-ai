@@ -40,7 +40,7 @@ import java.util.Map;
  * @author Yzm
  */
 @Slf4j
-@Component
+@Component("weaviate")
 public class WeaviateVectorStoreStrategy extends AbstractVectorStoreStrategy {
 
     private WeaviateClient client;

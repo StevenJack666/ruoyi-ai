@@ -45,3 +45,18 @@ CREATE TABLE skill (
 CREATE INDEX idx_skill_user_id ON skill (user_id);
 CREATE INDEX idx_skill_updated_at ON skill (updated_at);
 
+
+Skill 和 Tool 虽然都是"让模型有额外能力"，但 **注入方式完全不同**。
+
+```python
+# 📌 好设计：按能力类型选择注入方式
+# Skill → 代码注入 system prompt（告诉模型怎么做）
+form_data['messages'].append(f'<skill name="{s.name}">\n{s.content}\n</skill>')
+
+# Tool → schema 注入 tools 数组（告诉模型能调什么）
+form_data['tools'].append({'type': 'function', 'function': spec})
+```
+
+**为什么这样设计？**
+- **Skill** 是固定逻辑（如"按 Markdown 格式输出"），不需要运行时交互，直接给代码就行
+- **Tool** 是动态操作（如查天气），需要标准化 schema + 运行时回调执行
