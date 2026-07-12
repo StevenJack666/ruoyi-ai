@@ -134,6 +134,20 @@ public class KnowledgeAttachServiceImpl implements IKnowledgeAttachService {
         MultipartFile file = bo.getFile();
         OssDTO ossDTO = ossService.uploadFile(file);
 
+        // 同一知识库下同名文件，先删旧的（附件 + 切片 + 向量）
+        String fileName = ossDTO.getOriginalName();
+        List<KnowledgeAttach> exists = baseMapper.selectList(
+            Wrappers.<KnowledgeAttach>lambdaQuery()
+                .eq(KnowledgeAttach::getKnowledgeId, bo.getKnowledgeId())
+                .eq(KnowledgeAttach::getName, fileName));
+        for (KnowledgeAttach old : exists) {
+            vectorStoreService.removeByDocId(old.getDocId(), String.valueOf(old.getKnowledgeId()));
+            knowledgeFragmentMapper.delete(Wrappers.<KnowledgeFragment>lambdaQuery()
+                .eq(KnowledgeFragment::getDocId, old.getDocId()));
+            baseMapper.deleteById(old.getId());
+            log.info("删除旧附件: id={}, name={}", old.getId(), fileName);
+        }
+
         KnowledgeAttach knowledgeAttach = new KnowledgeAttach();
         knowledgeAttach.setKnowledgeId(bo.getKnowledgeId());
         knowledgeAttach.setOssId(ossDTO.getOssId());

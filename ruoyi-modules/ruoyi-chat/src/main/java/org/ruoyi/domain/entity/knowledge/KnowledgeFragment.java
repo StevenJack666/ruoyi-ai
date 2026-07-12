@@ -43,6 +43,11 @@ public class KnowledgeFragment extends BaseEntity {
     private String content;
 
     /**
+     * 向量数据（逗号分隔浮点数）
+     */
+    private String vector;
+
+    /**
      * 备注
      */
     private String remark;

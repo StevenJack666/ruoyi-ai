@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.IntStream;
 
 @Slf4j
-@Component
+@Component("milvus")
 public class MilvusVectorStoreStrategy extends AbstractVectorStoreStrategy {
 
     private final KnowledgeAttachMapper knowledgeAttachMapper;

@@ -169,7 +169,7 @@ public class ChatServiceFacade implements IChatService {
     private static final String OPEN_API_DEFAULT_MODEL = "openapi.default.model";
 
     // ChatServiceFacade.java
-    // todo 文件上传
+    // todo 文件上传，应该返回文件列表
     public Long attachSessionFile(MultipartFile file, Long sessionId) {
         Long fileOssId = null;
         String fileName = file.getOriginalFilename();
@@ -266,7 +266,8 @@ public class ChatServiceFacade implements IChatService {
         if (chatModelVo == null) {
             throw new IllegalArgumentException("模型不存在: " + chatRequest.getModel());
         }
-
+        // 处理聊天消息(包含多模态)
+        processChatMessage(chatRequest, userId);
         // 2. 构建上下文消息列表
         List<ChatMessage> contextMessages = buildContextMessages(chatRequest);
 
@@ -275,9 +276,6 @@ public class ChatServiceFacade implements IChatService {
         chatRequest.setTokenValue(tokenValue);
         chatRequest.setChatModelVo(chatModelVo);
         chatRequest.setContextMessages(contextMessages);
-
-        // 处理聊天消息(包含多模态)
-        processChatMessage(chatRequest, userId);
 
         // 3. 处理特殊聊天模式（工作流、人机交互恢复、思考模式）
         SseEmitter sseEmitter = handleSpecialChatModes(chatRequest);

@@ -42,7 +42,7 @@ import java.util.stream.IntStream;
  * Qdrant向量库策略实现
  */
 @Slf4j
-@Component
+@Component("qdrant")
 public class QdrantVectorStoreStrategy extends AbstractVectorStoreStrategy {
 
     private static final String VECTOR_STORE_TYPE   = "qdrant";
