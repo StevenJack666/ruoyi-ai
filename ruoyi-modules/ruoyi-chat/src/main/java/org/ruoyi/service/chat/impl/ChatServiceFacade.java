@@ -378,6 +378,7 @@ public class ChatServiceFacade implements IChatService {
 
         McpClient bingMcpClient = new DefaultMcpClient.Builder()
             .transport(bingTransport)
+            .listener(new MyMcpClientListener(userId))
             .build();
 
         List<ToolSpecification> toolSpecifications = bingMcpClient.listTools();

@@ -33,7 +33,6 @@ import java.util.List;
 public class LangChain4jObservabilityConfig {
 
     private final AiServiceListenerRegistrar registrar = AiServiceListenerRegistrar.newInstance();
-    private final ToolConfirmationManager confirmationManager;
 
     /**
      * 注册 AI 服务级别的事件监听器
@@ -126,8 +125,6 @@ public class LangChain4jObservabilityConfig {
 
     @Bean
     public McpClientListener mcpClientListener() {
-        MyMcpClientListener listener = new MyMcpClientListener();
-        MyMcpClientListener.setConfirmationManager(confirmationManager);
-        return listener;
+        return new MyMcpClientListener();
     }
 }

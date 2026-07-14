@@ -2,7 +2,6 @@ package org.ruoyi.observability;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.langchain4j.mcp.client.McpCallContext;
 import dev.langchain4j.mcp.client.McpClientListener;
 import dev.langchain4j.mcp.client.McpGetPromptResult;
@@ -10,11 +9,9 @@ import dev.langchain4j.mcp.client.McpReadResourceResult;
 import dev.langchain4j.mcp.protocol.McpCallToolRequest;
 import dev.langchain4j.mcp.protocol.McpClientMessage;
 import dev.langchain4j.service.tool.ToolExecutionResult;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.sse.dto.SseEventDto;
 import org.ruoyi.common.sse.utils.SseMessageUtils;
-import org.ruoyi.mcp.service.core.ToolConfirmationManager;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,22 +30,6 @@ public class MyMcpClientListener implements McpClientListener {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    /** 静态 holder，由 Spring 启动时注入 */
-    @Setter
-    private static ToolConfirmationManager confirmationManager;
-
-    /** 需要用户二次确认的工具名称列表 */
-    private static final Set<String> CONFIRM_REQUIRED_TOOLS = Set.of(
-        "execute_sql",
-        "edit_file",
-        "delete_file",
-        "write_file",
-        "batchLoadTools",
-        "remove",
-        "getCurrentTime",
-        "orderMilkTea"
-    );
-
     private final Long userId;
 
     public MyMcpClientListener(Long userId) {
@@ -65,31 +46,18 @@ public class MyMcpClientListener implements McpClientListener {
     public void beforeExecuteTool(McpCallContext context) {
         if (!(context.message() instanceof McpCallToolRequest request)) return;
         String name = (String) request.getParams().get("name");
+        Object arguments = request.getParams().get("arguments"); // 获取入参
         log.info("工具调用之前：{}", name);
-        pushMcpEvent(name, "pending", null);
-
-        // 用户二次确认（仅针对特定工具）
-        if (confirmationManager != null && userId != null && CONFIRM_REQUIRED_TOOLS.contains(name)) {
-            @SuppressWarnings("unchecked")
-            ObjectNode argsNode = (ObjectNode) request.getParams().get("arguments");
-            Map<String, Object> args = new ObjectMapper().convertValue(argsNode, Map.class);
-            String confirmId = confirmationManager.createConfirmation(userId, name, args);
-            boolean approved = confirmationManager.waitForConfirmation(confirmId);
-            if (!approved) {
-                log.info("用户拒绝工具调用: {}", name);
-                return;
-            }
-            log.info("用户同意工具调用: {}", name);
-        }
+        pushMcpEvent(name, "pending", arguments != null ? arguments.toString() : null);
     }
 
     @Override
     public void afterExecuteTool(McpCallContext context, ToolExecutionResult result, Map<String, Object> rawResult) {
         if (!(context.message() instanceof McpCallToolRequest request)) return;
         String name = (String) request.getParams().get("name");
-        String resultText = result != null ? result.toString() : "";
+        String resultText = result != null ? result.resultText() : "";
         log.info("工具调用之后：{}, 返回结果 {}", name, result);
-        pushMcpEvent(name, "success", truncate(resultText, 500));
+        pushMcpEvent(name, "done", truncate(resultText, 500));
     }
 
     @Override
