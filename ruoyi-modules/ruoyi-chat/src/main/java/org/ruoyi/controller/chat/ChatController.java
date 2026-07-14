@@ -42,7 +42,7 @@ public class ChatController {
     @ResponseBody
     public R<Long> uploadSessionFile(
             @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile file,
-            @Parameter(description = "会话ID", required = true) @RequestParam Long sessionId) {
+            @RequestParam(required = false) Long sessionId) {
         // TODO: 具体逻辑委托给 service 层
         return R.ok(chatService.attachSessionFile(file, sessionId));
     }
