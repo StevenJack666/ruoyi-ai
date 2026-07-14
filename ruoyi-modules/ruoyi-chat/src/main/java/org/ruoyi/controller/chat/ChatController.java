@@ -41,8 +41,8 @@ public class ChatController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseBody
     public R<Long> uploadSessionFile(
-        @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile file,
-        @Parameter(description = "会话ID", required = true) @RequestParam Long sessionId) {
+            @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile file,
+            @RequestParam(required = false) Long sessionId) {
         // TODO: 具体逻辑委托给 service 层
         return R.ok(chatService.attachSessionFile(file, sessionId));
     }
