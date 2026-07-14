@@ -8,14 +8,28 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.core.domain.R;
+import org.ruoyi.domain.UpdateFileRequest;
 import org.ruoyi.domain.dto.ToolConfirmRequest;
+import org.ruoyi.factory.ChatServiceFactory;
 import org.ruoyi.mcp.service.core.ToolConfirmationManager;
+import org.ruoyi.service.chat.AbstractChatService;
 import org.ruoyi.service.chat.impl.ChatServiceFacade;
+import org.ruoyi.service.chat.impl.provider.ProviderImageDescriber;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.io.IOException;
+import java.nio.file.FileStore;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -33,6 +47,7 @@ public class ChatController {
 
     private final ChatServiceFacade chatService;
     private final ToolConfirmationManager toolConfirmationManager;
+    private final ChatServiceFactory chatServiceFactory;
 
     /**
      * 会话文档上传（仅本次对话有效，Redis缓存，30分钟过期）
@@ -40,11 +55,11 @@ public class ChatController {
     @Operation(summary = "上传会话文档", description = "上传文档到指定会话，文档缓存30分钟后自动过期")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseBody
-    public R<Long> uploadSessionFile(
-            @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile file,
+    public R<List<Long>> uploadSessionFile(
+            @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile[] fileList,
             @Parameter(description = "会话ID", required = true) @RequestParam Long sessionId) {
         // TODO: 具体逻辑委托给 service 层
-        return R.ok(chatService.attachSessionFile(file, sessionId));
+        return R.ok(chatService.attachSessionFile(fileList, sessionId));
     }
 
 
@@ -68,6 +83,48 @@ public class ChatController {
         boolean success = toolConfirmationManager.respond(request.getConfirmId(), request.isApproved());
         log.info("用户{}工具调用: confirmId={}", request.isApproved() ? "同意" : "拒绝", request.getConfirmId());
         return success ? R.ok() : R.fail("确认请求不存在或已过期");
+    }
+
+    /**
+     * 修改文件内容
+     */
+    @PostMapping("/updateFileContent")
+    @ResponseBody
+    public R<Void> updateFileContent(@RequestBody UpdateFileRequest request) {
+        try {
+            // 从对象中获取参数
+            String content = request.getContent();
+            String filePath = request.getFilePath();
+
+            Path path = Paths.get(filePath);
+
+            // 1. 校验文件是否存在
+            if (!Files.exists(path)) {
+                return R.fail("文件不存在: " + filePath);
+            }
+
+            // 2. 检查文件所在存储区的可用空间（你之前写的 getFileStore 逻辑）
+            FileStore store = Files.getFileStore(path);
+            long availableSpace = store.getUsableSpace();
+            // 简单校验：如果剩余空间小于 1MB，给出警告（可根据实际情况调整）
+            if (availableSpace < 1024 * 1024) {
+                return R.fail("磁盘空间不足，无法写入文件");
+            }
+            // 3. 确保父目录存在（防止路径错误导致写入失败）
+            if (path.getParent() != null && !Files.exists(path.getParent())) {
+                Files.createDirectories(path.getParent());
+            }
+            // 4. 写入文件内容（覆盖写入）
+            // 注意：前端传来的 content 建议是 UTF-8 编码的字符串
+            Files.writeString(path, content);
+            return R.ok();
+        } catch (IOException e) {
+            // 捕获文件读写异常
+            return R.fail("文件修改失败: " + e.getMessage());
+        } catch (Exception e) {
+            // 捕获其他未知异常
+            return R.fail("系统异常: " + e.getMessage());
+        }
     }
 
 }

@@ -2,6 +2,7 @@ package org.ruoyi.observability;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.langchain4j.mcp.client.McpCallContext;
 import dev.langchain4j.mcp.client.McpClientListener;
 import dev.langchain4j.mcp.client.McpGetPromptResult;
@@ -43,7 +44,9 @@ public class MyMcpClientListener implements McpClientListener {
         "delete_file",
         "write_file",
         "batchLoadTools",
-        "remove"
+        "remove",
+        "getCurrentTime",
+        "orderMilkTea"
     );
 
     private final Long userId;
@@ -68,7 +71,8 @@ public class MyMcpClientListener implements McpClientListener {
         // 用户二次确认（仅针对特定工具）
         if (confirmationManager != null && userId != null && CONFIRM_REQUIRED_TOOLS.contains(name)) {
             @SuppressWarnings("unchecked")
-            Map<String, Object> args = (Map<String, Object>) request.getParams().get("arguments");
+            ObjectNode argsNode = (ObjectNode) request.getParams().get("arguments");
+            Map<String, Object> args = new ObjectMapper().convertValue(argsNode, Map.class);
             String confirmId = confirmationManager.createConfirmation(userId, name, args);
             boolean approved = confirmationManager.waitForConfirmation(confirmId);
             if (!approved) {

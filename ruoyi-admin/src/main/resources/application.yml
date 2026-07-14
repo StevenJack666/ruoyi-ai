@@ -123,7 +123,7 @@ security:
     - /*/api-docs/**
     - /warm-flow-ui/config
     - /workflow/run
-    - /openapi/**
+#    - /openapi/**
 # 多租户配置
 tenant:
   # 是否开启

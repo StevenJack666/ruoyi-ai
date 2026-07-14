@@ -1,23 +1,25 @@
 package org.ruoyi.service.chat.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.agentic.AgenticServices;
 import dev.langchain4j.agentic.supervisor.SupervisorAgent;
 import dev.langchain4j.agentic.supervisor.SupervisorResponseStrategy;
+import dev.langchain4j.community.model.dashscope.QwenChatModel;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.mcp.McpToolProvider;
 import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.transport.McpTransport;
-import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
+import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
-import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.service.tool.ToolExecutor;
 import dev.langchain4j.service.tool.ToolProvider;
-import dev.langchain4j.skills.shell.ShellSkills;
+import dev.langchain4j.service.tool.ToolProviderResult;
 import dev.langchain4j.rag.AugmentationRequest;
 import dev.langchain4j.rag.AugmentationResult;
 import dev.langchain4j.rag.DefaultRetrievalAugmentor;
@@ -28,14 +30,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 
-import org.ruoyi.agent.ChartGenerationAgent;
-import org.ruoyi.agent.EchartsAgent;
-import org.ruoyi.agent.SkillsAgent;
-import org.ruoyi.agent.SqlAgent;
-import org.ruoyi.agent.WebSearchAgent;
-import org.ruoyi.agent.tool.ExecuteSqlQueryTool;
-import org.ruoyi.agent.tool.QueryAllTablesTool;
-import org.ruoyi.agent.tool.QueryTableSchemaTool;
+import org.ruoyi.agent.*;
 import org.ruoyi.common.chat.base.ThreadContext;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.chat.domain.dto.request.ReSumeRunner;
@@ -139,7 +134,7 @@ public class ChatServiceFacade implements IChatService {
     private final TextSplitter textSplitter;                       // 分块用（CharacterTextSplitter）
     // ChatServiceFacade 加两个依赖
     private final UploadServiceFactory uploadServiceFactory;                 // OSS上传
-    private final SessionUploadRecordMapper recordMapper;       // 记录写入
+    private final SessionUploadRecordMapper recordMapper;
 
     /**
      * 内存实例缓存，避免同一会话重复创建
@@ -149,82 +144,89 @@ public class ChatServiceFacade implements IChatService {
 
     // ChatServiceFacade.java
     // todo 文件上传，应该返回文件列表
-    public Long attachSessionFile(MultipartFile file, Long sessionId) {
-        Long fileOssId = null;
-        String fileName = file.getOriginalFilename();
-        String ext = fileName.substring(fileName.lastIndexOf("."));
-        long fileSize = file.getSize();
-        Long userId = LoginHelper.getUserId();
-        log.info("上传文件: fileName={}, fileSize={}", fileName, fileSize);
-
-        // 1. 获取文件字节数组（防止流被消费 导致NoSuchFileException）
-        byte[] fileBytes;
-        try (InputStream is = file.getInputStream()) {
-            fileBytes = is.readAllBytes();
-        } catch (IOException e) {
-            log.error("会话文档读取失败: fileName={}", fileName, e);
-            throw new ServiceException("文件读取失败，请重试");
+    public List<Long> attachSessionFile(MultipartFile[] fileList, Long sessionId) {
+        if (fileList == null){
+            throw new ServiceException("上传的文件列表为空");
         }
+        List<Long> fileOssIds = new ArrayList<>();
+        List<String> docChunk = new ArrayList<>();
+        for (MultipartFile file : fileList) {
+            String fileName = file.getOriginalFilename();
+            String ext = fileName.substring(fileName.lastIndexOf("."));
+            long fileSize = file.getSize();
+            Long userId = LoginHelper.getUserId();
+            log.info("上传文件: fileName={}, fileSize={}", fileName, fileSize);
 
-        // 2. OSS持久化原始文件（用于溯源）
-        String actualCode = StringUtils.defaultIfEmpty(initUploadMode(), UploadModeType.DEFAULT.getCode());
-        IUploadService uploadService = uploadServiceFactory.getOriginalService(actualCode);
-        // 将文件上传成数组
-        MultipartFile[] files = {file};
-        UploadVo uploadVo = uploadService.upload(files);
-
-        List<SysOssUploadVo> uploadVos = uploadVo.getUploadVos();
-        if (CollectionUtils.isEmpty(uploadVos)){
-            throw new ServiceException("上传文件信息异常");
-        }
-
-        // 3. 写入上传记录（失败不影响主流程，仅记日志）
-        for (SysOssUploadVo sysOssUploadVo : uploadVos) {
-            try {
-                SessionUploadRecord record = new SessionUploadRecord();
-                record.setUserId(userId);
-                record.setSessionId(sessionId);
-                record.setFileName(fileName);
-                record.setFileType(ext);
-                record.setFileSize(fileSize);
-                Long ossId = fileOssId = Long.parseLong(sysOssUploadVo.getOssId());
-                record.setOssId(ossId);
-                record.setOssUrl(sysOssUploadVo.getUrl());
-                recordMapper.insert(record);
-            } catch (Exception e) {
-                log.error("上传记录写入失败: fileName={}", fileName, e);
-                // 不抛异常，不影响后续解析
+            // 1. 获取文件字节数组（防止流被消费 导致NoSuchFileException）
+            byte[] fileBytes;
+            try (InputStream is = file.getInputStream()) {
+                fileBytes = is.readAllBytes();
+            } catch (IOException e) {
+                log.error("会话文档读取失败: fileName={}", fileName, e);
+                throw new ServiceException("文件读取失败，请重试");
             }
-        }
 
-        // 4. 解析 todo，可以做成异步的，保障前端体验
-        ResourceLoader loader = resourceLoaderFactory.getLoaderByFileType(ext);
-        String text;
-        try (InputStream is = new ByteArrayInputStream(fileBytes)) { // try-with-resources 自动关流
-            text = loader.getContent(is);
-        } catch (IOException e) {
-            log.error("会话文档读取失败: fileName={}", fileName, e);
-            throw new ServiceException("文件读取失败，请重试");
-        }
+            // 2. OSS持久化原始文件（用于溯源）
+            String actualCode = StringUtils.defaultIfEmpty(initUploadMode(), UploadModeType.DEFAULT.getCode());
+            IUploadService uploadService = uploadServiceFactory.getOriginalService(actualCode);
+            // 将文件上传成数组
+            MultipartFile[] files = {file};
+            UploadVo uploadVo = uploadService.upload(files);
 
-        // 5. 分块
-        List<String> chunks = loader.getChunkList(text, null);
-        if (CollUtil.isEmpty(chunks)) {
-            log.warn("会话文档分块为空: fileName={}", fileName);
-            return fileOssId;
-        }
+            List<SysOssUploadVo> uploadVos = uploadVo.getUploadVos();
+            if (CollectionUtils.isEmpty(uploadVos)){
+                throw new ServiceException("上传文件信息异常");
+            }
 
+            // 3. 写入上传记录（失败不影响主流程，仅记日志）
+            for (SysOssUploadVo sysOssUploadVo : uploadVos) {
+                try {
+                    SessionUploadRecord record = new SessionUploadRecord();
+                    record.setUserId(userId);
+                    record.setSessionId(sessionId);
+                    record.setFileName(fileName);
+                    record.setFileType(ext);
+                    record.setFileSize(fileSize);
+                    Long ossId = Long.parseLong(sysOssUploadVo.getOssId());
+                    fileOssIds.add(ossId);
+                    record.setOssId(ossId);
+                    record.setOssUrl(sysOssUploadVo.getUrl());
+                    recordMapper.insert(record);
+                } catch (Exception e) {
+                    log.error("上传记录写入失败: fileName={}", fileName, e);
+                    // 不抛异常，不影响后续解析
+                }
+            }
+
+            // 4. 解析 todo，可以做成异步的，保障前端体验
+            ResourceLoader loader = resourceLoaderFactory.getLoaderByFileType(ext);
+            String text;
+            try (InputStream is = new ByteArrayInputStream(fileBytes)) { // try-with-resources 自动关流
+                text = loader.getContent(is);
+            } catch (IOException e) {
+                log.error("会话文档读取失败: fileName={}", fileName, e);
+                throw new ServiceException("文件读取失败，请重试");
+            }
+
+            // 5. 分块
+            List<String> chunks = loader.getChunkList(text, null);
+            if (CollUtil.isEmpty(chunks)) {
+                log.warn("会话文档分块为空: fileName={}", fileName);
+                return fileOssIds;
+            }
+            docChunk.addAll(chunks);
+        }
         // 6. 存储缓存
         try {
             String cacheKey = "session:docs:" + sessionId;
             RedisUtils.deleteObject(cacheKey);
-            RedisUtils.setCacheList(cacheKey, chunks);
+            RedisUtils.setCacheList(cacheKey, docChunk);
             RedisUtils.expire(cacheKey, Duration.ofMinutes(30));
         } catch (Exception e) {
             log.error("会话文档缓存失败: sessionId={}", sessionId, e);
             throw new ServiceException("文档缓存失败，请重试");
         }
-        return fileOssId;
+        return fileOssIds;
     }
 
 
@@ -366,110 +368,62 @@ public class ChatServiceFacade implements IChatService {
 
      */
     private SseEmitter handleThinkingMode(ChatRequest chatRequest) {
-        // 配置监督者模型
-        OpenAiChatModel plannerModel = OpenAiChatModel.builder()
-            .baseUrl(chatRequest.getChatModelVo().getApiHost())
+        Long userId = chatRequest.getUserId();
+
+        McpTransport bingTransport = StreamableHttpMcpTransport.builder()
+            .url("http://127.0.0.1:8085/sse")
+            .logRequests(true)
+            .logResponses(true)
+            .build();
+
+        McpClient bingMcpClient = new DefaultMcpClient.Builder()
+            .transport(bingTransport)
+            .build();
+
+        List<ToolSpecification> toolSpecifications = bingMcpClient.listTools();
+        System.out.println(toolSpecifications);
+
+        // 2. 创建工具提供者
+        ToolProvider mcpToolProvider  = McpToolProvider.builder()
+            .mcpClients(List.of(bingMcpClient))
+            .build();
+
+        ToolProvider interceptedToolProvider = (toolProviderRequest) -> {
+            // 获取 MCP 提供的所有工具
+            ToolProviderResult mcpResult = mcpToolProvider.provideTools(toolProviderRequest);
+            ToolProviderResult.Builder builder = ToolProviderResult.builder();
+            if (mcpResult != null && mcpResult.tools() != null) {
+                // 遍历所有 MCP 工具
+                for (Map.Entry<ToolSpecification, ToolExecutor> entry : mcpResult.tools().entrySet()) {
+                    ToolSpecification spec = entry.getKey();
+                    ToolExecutor originalExecutor = entry.getValue();
+                    // 🔥 核心：用你的包装器把原来的执行器包起来
+                    ToolExecutor wrappedExecutor = new GobalToolExecutor(originalExecutor, userId);
+                    // 将“原说明书”和“新执行器”绑定
+                    builder.add(spec, wrappedExecutor);
+                }
+            }
+            return builder.build();
+        };
+
+//        // 配置监督者模型
+        QwenChatModel plannerModel = QwenChatModel.builder()
             .apiKey(chatRequest.getChatModelVo().getApiKey())
             .modelName(chatRequest.getChatModelVo().getModelName())
             .build();
 
-        // Bing 搜索 MCP 客户端
-        McpTransport bingTransport = new StdioMcpTransport.Builder()
-            .command(List.of("C:\\Program Files\\nodejs\\npx.cmd", "-y", "bing-cn-mcp"))
-            .logEvents(true)
-            .build();
-
-        Long userId = chatRequest.getUserId();
-        McpClient bingMcpClient = new DefaultMcpClient.Builder()
-            .transport(bingTransport)
-            .listener(new MyMcpClientListener(userId))
-            .build();
-
-        // Playwright MCP 客户端 - 浏览器自动化工具
-        McpTransport playwrightTransport = new StdioMcpTransport.Builder()
-            .command(List.of("C:\\Program Files\\nodejs\\npx.cmd", "-y", "@playwright/mcp@latest"))
-            .logEvents(true)
-            .build();
-
-        McpClient playwrightMcpClient = new DefaultMcpClient.Builder()
-            .transport(playwrightTransport)
-            .listener(new MyMcpClientListener(userId))
-            .build();
-
-        // Filesystem MCP 客户端 - 文件管理工具
-        // 允许 AI 读取、写入、搜索文件（基于当前项目根目录）
-        String userDir = System.getProperty("user.dir");
-        McpTransport filesystemTransport = new StdioMcpTransport.Builder()
-            .command(List.of("C:\\Program Files\\nodejs\\npx.cmd", "-y",
-                "@modelcontextprotocol/server-filesystem", userDir))
-            .logEvents(true)
-
-            .build();
-
-        McpClient filesystemMcpClient = new DefaultMcpClient.Builder()
-            .transport(filesystemTransport)
-            .listener(new MyMcpClientListener(userId))
-            .build();
-
-        // 合并三个 MCP 客户端的工具
-        ToolProvider toolProvider = McpToolProvider.builder()
-            // bingMcpClient,
-            .mcpClients(List.of(playwrightMcpClient, filesystemMcpClient))
-            .build();
-
-        // ========== LangChain4j Skills 基本用法 ==========
-        // 通过 SKILL.md 文件定义，LLM 按需通过 activate_skill 工具加载
-        // 加载 Skills - 使用相对路径，基于项目根目录
-        java.nio.file.Path skillsPath = java.nio.file.Path.of(userDir, "ruoyi-admin/src/main/resources/skills");
-        List<dev.langchain4j.skills.FileSystemSkill> skillsList = dev.langchain4j.skills.FileSystemSkillLoader
-            .loadSkills(skillsPath)
-            ;
-
-        ShellSkills skills = ShellSkills.from(skillsList);
-
-        // 构建子 Agent
-        WebSearchAgent searchAgent  = AgenticServices.agentBuilder(WebSearchAgent.class)
+        BasicAgent basicAgent = AgenticServices.agentBuilder(BasicAgent.class)
             .chatModel(plannerModel)
-            .toolProvider(toolProvider)
-            .listener(new MyAgentListener())
-            .build();
-
-        // 构建子 Agent 2: SkillsAgent - 负责文档处理技能（docx、pdf、xlsx）
-        // 独立管理 Skills 工具
-        SkillsAgent skillsAgent = AgenticServices.agentBuilder(SkillsAgent.class)
-            .chatModel(plannerModel)
-            .systemMessage("You have access to the following skills:\n" + skills.formatAvailableSkills()
-                + "\nWhen the user's request relates to one of these skills, activate it first using the `activate_skill` tool before proceeding.")
-            .toolProvider(skills.toolProvider())
-            .build();
-
-        // 构建子 Agent 3: SqlAgent - 负责数据库查询
-        SqlAgent sqlAgent = AgenticServices.agentBuilder(SqlAgent.class)
-            .chatModel(plannerModel)
-            .tools(new QueryAllTablesTool(), new QueryTableSchemaTool(), new ExecuteSqlQueryTool())
-            .listener(new MyAgentListener())
-            .build();
-
-        // 构建子 Agent 4: ChartGenerationAgent - 负责图表生成
-        ChartGenerationAgent chartGenerationAgent = AgenticServices.agentBuilder(ChartGenerationAgent.class)
-            .chatModel(plannerModel)
-            .listener(new MyAgentListener())
-            .build();
-
-        // 构建子 Agent 5: EchartsAgent - 负责数据可视化（结合 SQL 查询生成 Echarts 图表）
-        EchartsAgent echartsAgent = AgenticServices.agentBuilder(EchartsAgent.class)
-            .chatModel(plannerModel)
-            .tools(new QueryAllTablesTool(), new QueryTableSchemaTool(), new ExecuteSqlQueryTool())
-            .listener(new MyAgentListener())
+            .toolProvider(interceptedToolProvider)
             .build();
 
         // 构建监督者 Agent - 管理多个子 Agent
         SupervisorAgent supervisor = AgenticServices.supervisorBuilder()
             .chatModel(plannerModel)
             //.listener(new SupervisorStreamListener(null))
-            .subAgents(skillsAgent,searchAgent, sqlAgent, chartGenerationAgent, echartsAgent)
+            .subAgents(basicAgent)
             // 加入历史上下文 - 使用 ChatMemoryProvider 提供持久化的聊天内存
-            //.chatMemoryProvider(memoryId -> createChatMemory(chatRequest.getSessionId()))
+//            .chatMemoryProvider(memoryId -> createChatMemory(chatRequest.getSessionId()))
             .responseStrategy(SupervisorResponseStrategy.LAST)
             .build();
 

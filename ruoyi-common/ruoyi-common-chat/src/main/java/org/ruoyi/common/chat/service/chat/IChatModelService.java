@@ -33,6 +33,13 @@ public interface IChatModelService {
     ChatModelVo selectModelByName(String modelName);
 
     /**
+     * 根据模型分类查询模型
+     * @param category 模型分类
+     * @return 模型管理
+     */
+    ChatModelVo selectModelByCategory(String category);
+
+    /**
      * 分页查询模型管理列表
      *
      * @param bo        查询条件
