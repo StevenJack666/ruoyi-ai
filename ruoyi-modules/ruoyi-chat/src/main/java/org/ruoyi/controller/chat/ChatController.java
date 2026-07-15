@@ -85,46 +85,4 @@ public class ChatController {
         return success ? R.ok() : R.fail("确认请求不存在或已过期");
     }
 
-    /**
-     * 修改文件内容
-     */
-    @PostMapping("/updateFileContent")
-    @ResponseBody
-    public R<Void> updateFileContent(@RequestBody UpdateFileRequest request) {
-        try {
-            // 从对象中获取参数
-            String content = request.getContent();
-            String filePath = request.getFilePath();
-
-            Path path = Paths.get(filePath);
-
-            // 1. 校验文件是否存在
-            if (!Files.exists(path)) {
-                return R.fail("文件不存在: " + filePath);
-            }
-
-            // 2. 检查文件所在存储区的可用空间（你之前写的 getFileStore 逻辑）
-            FileStore store = Files.getFileStore(path);
-            long availableSpace = store.getUsableSpace();
-            // 简单校验：如果剩余空间小于 1MB，给出警告（可根据实际情况调整）
-            if (availableSpace < 1024 * 1024) {
-                return R.fail("磁盘空间不足，无法写入文件");
-            }
-            // 3. 确保父目录存在（防止路径错误导致写入失败）
-            if (path.getParent() != null && !Files.exists(path.getParent())) {
-                Files.createDirectories(path.getParent());
-            }
-            // 4. 写入文件内容（覆盖写入）
-            // 注意：前端传来的 content 建议是 UTF-8 编码的字符串
-            Files.writeString(path, content);
-            return R.ok();
-        } catch (IOException e) {
-            // 捕获文件读写异常
-            return R.fail("文件修改失败: " + e.getMessage());
-        } catch (Exception e) {
-            // 捕获其他未知异常
-            return R.fail("系统异常: " + e.getMessage());
-        }
-    }
-
 }
