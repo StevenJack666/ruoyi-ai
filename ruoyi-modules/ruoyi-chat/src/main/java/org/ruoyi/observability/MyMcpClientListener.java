@@ -73,7 +73,8 @@ public class MyMcpClientListener implements McpClientListener {
             boolean approved = confirmationManager.waitForConfirmation(confirmId);
             if (!approved) {
                 log.info("用户拒绝工具调用: {}", name);
-                return;
+                pushMcpEvent(name, "rejected", "用户取消了该操作");
+                throw new RuntimeException("用户拒绝了工具调用: " + name);
             }
             log.info("用户同意工具调用: {}", name);
         }
