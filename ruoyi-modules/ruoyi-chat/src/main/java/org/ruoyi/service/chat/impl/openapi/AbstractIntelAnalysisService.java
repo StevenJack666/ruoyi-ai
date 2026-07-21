@@ -17,6 +17,7 @@ import org.ruoyi.service.chat.IChatMessageService;
 import org.ruoyi.system.service.ISysConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -45,10 +46,9 @@ public abstract class AbstractIntelAnalysisService<T> implements IntelAnalysisSe
     @Override
     public Object analyze(String content, String model, Long userId, ChatModel chatModel) {
         // 1. 组装消息列表 (注意：必须用 ArrayList，因为重试时需要追加消息)
-        List<ChatMessage> messages = List.of(
-            new SystemMessage(getSystemPrompt()),
-            new UserMessage(content)
-        );
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(new SystemMessage(getSystemPrompt()));
+        messages.add( new UserMessage(content));
 
         Long sessionId = getSessionConfig().getLong("sessionId");
         String jsonResult = null;
@@ -73,7 +73,7 @@ public abstract class AbstractIntelAnalysisService<T> implements IntelAnalysisSe
         }
         // 7. 走到这里说明首次尝试失败，执行重试修复
         int maxRetries = getMaxRetries();
-        String retryJsonResult = executeWithRetry(chatModel, messages, content, maxRetries);
+        String retryJsonResult = executeWithRetry(chatModel, messages, jsonResult, maxRetries);
         // 8. 重试成功后保存并返回
         chatMessageService.saveChatMessage(userId, sessionId, retryJsonResult, RoleType.ASSISTANT.getName(), model);
         return JsonUtils.parseObject(retryJsonResult, getResultClass());
@@ -188,7 +188,7 @@ public abstract class AbstractIntelAnalysisService<T> implements IntelAnalysisSe
      */
     protected String cleanJsonResult(String jsonResult) {
         if (jsonResult == null) return null;
-        return jsonResult.replaceAll("^```json\\s*", "").replaceAll("\\s*```\\s*$", "");
+        return jsonResult.replaceAll("```json\\s*", "").replaceAll("\\s*```\\s*", "");
     }
 
     /**
