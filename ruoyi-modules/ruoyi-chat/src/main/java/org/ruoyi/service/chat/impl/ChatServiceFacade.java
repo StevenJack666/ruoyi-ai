@@ -603,7 +603,7 @@ public class ChatServiceFacade implements IChatService {
             KnowledgeInfoVo knowledgeInfoVo = knowledgeInfoService.queryById(Long.valueOf(knowledgeId));
             if (knowledgeInfoVo != null) {
                 // 校验知识库是否公开
-                Long share = knowledgeInfoVo.getShare();
+                Integer share = knowledgeInfoVo.getShare();
                 boolean isPublic = share != null && share != 0L;
                 // todo 校验当前用户是否有权限访问该知识库
                 ChatModelVo chatModel = chatModelService.selectModelByName(knowledgeInfoVo.getEmbeddingModel());

@@ -40,7 +40,7 @@ public class KnowledgeInfo extends BaseEntity {
     /**
      * 是否公开知识库（0 否 1是）
      */
-    private Long share;
+    private Integer share;
 
     /**
      * 知识库描述
