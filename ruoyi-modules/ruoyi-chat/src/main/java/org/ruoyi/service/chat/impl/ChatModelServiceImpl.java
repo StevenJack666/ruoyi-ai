@@ -59,6 +59,20 @@ public class ChatModelServiceImpl implements IChatModelService {
     }
 
     /**
+     * 根据模型分类查询模型
+     *
+     * @param category 模型分类
+     * @return 模型管理
+     */
+    @Override
+    public ChatModelVo selectModelByCategory(String category) {
+        LambdaQueryWrapper<ChatModel> lqw = Wrappers.lambdaQuery();
+        lqw.eq(ChatModel::getCategory, category);
+        lqw.last("LIMIT 1");
+        return baseMapper.selectVoOne(lqw);
+    }
+
+    /**
      * 分页查询模型管理列表
      *
      * @param bo        查询条件

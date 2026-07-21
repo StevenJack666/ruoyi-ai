@@ -8,16 +8,18 @@ import org.ruoyi.common.chat.domain.response.OpenApiResponse;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.List;
+
 /**
  * 公共大模型对话接口
  */
 public interface IChatService {
     /**
-    * todo 会话级别文件上传
-    * @param file
-    * @param sessionId
- */
-    Long attachSessionFile(MultipartFile file, Long sessionId);
+     * todo 会话级别文件上传
+     * @param fileList
+     * @param sessionId
+     */
+    List<Long> attachSessionFile(MultipartFile[] fileList, Long sessionId);
 
     /**
      * 客户端发送对话消息到服务端

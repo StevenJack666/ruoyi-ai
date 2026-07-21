@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.List;
+
 
 /**
  * 聊天管理
@@ -40,11 +42,11 @@ public class ChatController {
     @Operation(summary = "上传会话文档", description = "上传文档到指定会话，文档缓存30分钟后自动过期")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseBody
-    public R<Long> uploadSessionFile(
-            @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile file,
-            @RequestParam(required = false) Long sessionId) {
+    public R<List<Long>> uploadSessionFile(
+        @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile[] fileList,
+        @Parameter(description = "会话ID", required = true) @RequestParam Long sessionId) {
         // TODO: 具体逻辑委托给 service 层
-        return R.ok(chatService.attachSessionFile(file, sessionId));
+        return R.ok(chatService.attachSessionFile(fileList, sessionId));
     }
 
 

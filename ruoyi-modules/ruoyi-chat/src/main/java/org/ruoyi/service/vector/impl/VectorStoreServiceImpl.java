@@ -7,6 +7,7 @@ import org.ruoyi.domain.bo.vector.StoreEmbeddingBo;
 import org.ruoyi.domain.vo.knowledge.KnowledgeRetrievalVo;
 import org.ruoyi.factory.VectorStoreStrategyFactory;
 import org.ruoyi.service.vector.VectorStoreService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
@@ -20,11 +21,16 @@ import java.util.List;
 @Service
 @Primary
 @Slf4j
-@RequiredArgsConstructor
 public class VectorStoreServiceImpl implements VectorStoreService {
 
+    @Lazy
     private final VectorStoreStrategyFactory strategyFactory;
 
+    // 注意：因为使用了 @Lazy，Lombok 的 @RequiredArgsConstructor 可能无法完美处理
+    // 建议手动写构造方法，或者确保 Lombok 版本支持 @Lazy 构造器注入
+    public VectorStoreServiceImpl(@Lazy VectorStoreStrategyFactory strategyFactory) {
+        this.strategyFactory = strategyFactory;
+    }
 
     /**
      * 获取当前配置的向量库策略
@@ -42,7 +48,7 @@ public class VectorStoreServiceImpl implements VectorStoreService {
     @Override
     public void storeEmbeddings(StoreEmbeddingBo storeEmbeddingBo) {
         log.info("存储向量数据: kid={}, docId={}, 数据条数={}",
-                storeEmbeddingBo.getKid(), storeEmbeddingBo.getDocId(), storeEmbeddingBo.getChunkList().size());
+            storeEmbeddingBo.getKid(), storeEmbeddingBo.getDocId(), storeEmbeddingBo.getChunkList().size());
         VectorStoreService strategy = getCurrentStrategy();
         strategy.storeEmbeddings(storeEmbeddingBo);
     }
@@ -50,7 +56,7 @@ public class VectorStoreServiceImpl implements VectorStoreService {
     @Override
     public List<String> getQueryVector(QueryVectorBo queryVectorBo) {
         log.info("查询向量数据: kid={}, query={}, maxResults={}",
-                queryVectorBo.getKid(), queryVectorBo.getQuery(), queryVectorBo.getMaxResults());
+            queryVectorBo.getKid(), queryVectorBo.getQuery(), queryVectorBo.getMaxResults());
         VectorStoreService strategy = getCurrentStrategy();
         return strategy.getQueryVector(queryVectorBo);
     }

@@ -170,82 +170,89 @@ public class ChatServiceFacade implements IChatService {
 
     // ChatServiceFacade.java
     // todo 文件上传，应该返回文件列表
-    public Long attachSessionFile(MultipartFile file, Long sessionId) {
-        Long fileOssId = null;
-        String fileName = file.getOriginalFilename();
-        String ext = fileName.substring(fileName.lastIndexOf("."));
-        long fileSize = file.getSize();
-        Long userId = LoginHelper.getUserId();
-        log.info("上传文件: fileName={}, fileSize={}", fileName, fileSize);
-
-        // 1. 获取文件字节数组（防止流被消费 导致NoSuchFileException）
-        byte[] fileBytes;
-        try (InputStream is = file.getInputStream()) {
-            fileBytes = is.readAllBytes();
-        } catch (IOException e) {
-            log.error("会话文档读取失败: fileName={}", fileName, e);
-            throw new ServiceException("文件读取失败，请重试");
+    public List<Long> attachSessionFile(MultipartFile[] fileList, Long sessionId) {
+        if (fileList == null){
+            throw new ServiceException("上传的文件列表为空");
         }
+        List<Long> fileOssIds = new ArrayList<>();
+        List<String> docChunk = new ArrayList<>();
+        for (MultipartFile file : fileList) {
+            String fileName = file.getOriginalFilename();
+            String ext = fileName.substring(fileName.lastIndexOf("."));
+            long fileSize = file.getSize();
+            Long userId = LoginHelper.getUserId();
+            log.info("上传文件: fileName={}, fileSize={}", fileName, fileSize);
 
-        // 2. OSS持久化原始文件（用于溯源）
-        String actualCode = StringUtils.defaultIfEmpty(initUploadMode(), UploadModeType.DEFAULT.getCode());
-        IUploadService uploadService = uploadServiceFactory.getOriginalService(actualCode);
-        // 将文件上传成数组
-        MultipartFile[] files = {file};
-        UploadVo uploadVo = uploadService.upload(files);
-
-        List<SysOssUploadVo> uploadVos = uploadVo.getUploadVos();
-        if (CollectionUtils.isEmpty(uploadVos)){
-            throw new ServiceException("上传文件信息异常");
-        }
-
-        // 3. 写入上传记录（失败不影响主流程，仅记日志）
-        for (SysOssUploadVo sysOssUploadVo : uploadVos) {
-            try {
-                SessionUploadRecord record = new SessionUploadRecord();
-                record.setUserId(userId);
-                record.setSessionId(sessionId);
-                record.setFileName(fileName);
-                record.setFileType(ext);
-                record.setFileSize(fileSize);
-                Long ossId = fileOssId = Long.parseLong(sysOssUploadVo.getOssId());
-                record.setOssId(ossId);
-                record.setOssUrl(sysOssUploadVo.getUrl());
-                recordMapper.insert(record);
-            } catch (Exception e) {
-                log.error("上传记录写入失败: fileName={}", fileName, e);
-                // 不抛异常，不影响后续解析
+            // 1. 获取文件字节数组（防止流被消费 导致NoSuchFileException）
+            byte[] fileBytes;
+            try (InputStream is = file.getInputStream()) {
+                fileBytes = is.readAllBytes();
+            } catch (IOException e) {
+                log.error("会话文档读取失败: fileName={}", fileName, e);
+                throw new ServiceException("文件读取失败，请重试");
             }
-        }
 
-        // 4. 解析 todo，可以做成异步的，保障前端体验
-        ResourceLoader loader = resourceLoaderFactory.getLoaderByFileType(ext);
-        String text;
-        try (InputStream is = new ByteArrayInputStream(fileBytes)) { // try-with-resources 自动关流
-            text = loader.getContent(is);
-        } catch (IOException e) {
-            log.error("会话文档读取失败: fileName={}", fileName, e);
-            throw new ServiceException("文件读取失败，请重试");
-        }
+            // 2. OSS持久化原始文件（用于溯源）
+            String actualCode = StringUtils.defaultIfEmpty(initUploadMode(), UploadModeType.DEFAULT.getCode());
+            IUploadService uploadService = uploadServiceFactory.getOriginalService(actualCode);
+            // 将文件上传成数组
+            MultipartFile[] files = {file};
+            UploadVo uploadVo = uploadService.upload(files);
 
-        // 5. 分块
-        List<String> chunks = loader.getChunkList(text, null);
-        if (CollUtil.isEmpty(chunks)) {
-            log.warn("会话文档分块为空: fileName={}", fileName);
-            return fileOssId;
-        }
+            List<SysOssUploadVo> uploadVos = uploadVo.getUploadVos();
+            if (CollectionUtils.isEmpty(uploadVos)){
+                throw new ServiceException("上传文件信息异常");
+            }
 
+            // 3. 写入上传记录（失败不影响主流程，仅记日志）
+            for (SysOssUploadVo sysOssUploadVo : uploadVos) {
+                try {
+                    SessionUploadRecord record = new SessionUploadRecord();
+                    record.setUserId(userId);
+                    record.setSessionId(sessionId);
+                    record.setFileName(fileName);
+                    record.setFileType(ext);
+                    record.setFileSize(fileSize);
+                    Long ossId = Long.parseLong(sysOssUploadVo.getOssId());
+                    fileOssIds.add(ossId);
+                    record.setOssId(ossId);
+                    record.setOssUrl(sysOssUploadVo.getUrl());
+                    recordMapper.insert(record);
+                } catch (Exception e) {
+                    log.error("上传记录写入失败: fileName={}", fileName, e);
+                    // 不抛异常，不影响后续解析
+                }
+            }
+
+            // 4. 解析 todo，可以做成异步的，保障前端体验
+            ResourceLoader loader = resourceLoaderFactory.getLoaderByFileType(ext);
+            String text;
+            try (InputStream is = new ByteArrayInputStream(fileBytes)) { // try-with-resources 自动关流
+                text = loader.getContent(is);
+            } catch (IOException e) {
+                log.error("会话文档读取失败: fileName={}", fileName, e);
+                throw new ServiceException("文件读取失败，请重试");
+            }
+
+            // 5. 分块
+            List<String> chunks = loader.getChunkList(text, null);
+            if (CollUtil.isEmpty(chunks)) {
+                log.warn("会话文档分块为空: fileName={}", fileName);
+                return fileOssIds;
+            }
+            docChunk.addAll(chunks);
+        }
         // 6. 存储缓存
         try {
             String cacheKey = "session:docs:" + sessionId;
             RedisUtils.deleteObject(cacheKey);
-            RedisUtils.setCacheList(cacheKey, chunks);
+            RedisUtils.setCacheList(cacheKey, docChunk);
             RedisUtils.expire(cacheKey, Duration.ofMinutes(30));
         } catch (Exception e) {
             log.error("会话文档缓存失败: sessionId={}", sessionId, e);
             throw new ServiceException("文档缓存失败，请重试");
         }
-        return fileOssId;
+        return fileOssIds;
     }
 
 
