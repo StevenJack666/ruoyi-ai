@@ -114,6 +114,11 @@ public class KnowledgeInfo extends BaseEntity {
     private Double hybridAlpha;
 
     /**
+     * 是否自动解析 (true: 立即解析, false: 仅上传)
+     */
+    private Boolean autoParse;
+
+    /**
      * 备注
      */
     private String remark;

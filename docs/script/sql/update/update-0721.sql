@@ -5,3 +5,5 @@ INSERT INTO `knowledge_info` (`id`, `user_id`, `name`, `share`, `description`, `
 INSERT INTO `sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`, `config_value`, `config_type`, `create_dept`, `create_by`, `create_time`, `update_by`, `update_time`, `remark`) VALUES (2077284779676590081, '000000', '默认知识库ID', 'knowledge.default.id', '2076932802555854850', 'N', 103, 1, '2026-07-15 14:51:00', 1, '2026-07-15 14:51:00', NULL);
 
 ALTER TABLE knowledge_fragment ADD FULLTEXT(content);
+
+ALTER TABLE `knowledge_info` ADD COLUMN `auto_parse` tinyint(4) NULL DEFAULT NULL COMMENT '是否自动解析 (true: 立即解析, false: 仅上传)' AFTER `hybrid_alpha`;
