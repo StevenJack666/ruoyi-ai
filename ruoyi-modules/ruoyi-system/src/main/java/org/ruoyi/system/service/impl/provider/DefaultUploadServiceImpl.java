@@ -1,6 +1,7 @@
 package org.ruoyi.system.service.impl.provider;
 
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.ruoyi.common.core.exception.ServiceException;
@@ -17,8 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -114,5 +114,29 @@ public class DefaultUploadServiceImpl implements IUploadService {
     @Override
     public String getProviderName() {
         return UploadModeType.DEFAULT.getCode();
+    }
+
+    @Override
+    public void download(String path, HttpServletResponse response) throws IOException{
+        // 注意：sysOss.getFileName() 返回的就是你提到的 D:\fileUpload\xxx.docx 这样的绝对路径
+        File localFile = new File(path);
+        if (!localFile.exists()) {
+            throw new ServiceException("服务器上的物理文件不存在或已被删除!");
+        }
+
+        // 3. 设置响应体长度（让浏览器知道文件大小，从而显示下载进度条）
+        response.setContentLengthLong(localFile.length());
+
+        // 4. 使用标准 Java IO 将本地文件流式写入到 HTTP 响应中
+        try (InputStream is = new FileInputStream(localFile);
+             OutputStream os = response.getOutputStream()) {
+
+            byte[] buffer = new byte[4096]; // 4KB 缓冲区，适合网络传输
+            int bytesRead;
+            while ((bytesRead = is.read(buffer)) != -1) {
+                os.write(buffer, 0, bytesRead);
+            }
+            os.flush(); // 确保所有数据都写入客户端
+        }
     }
 }
