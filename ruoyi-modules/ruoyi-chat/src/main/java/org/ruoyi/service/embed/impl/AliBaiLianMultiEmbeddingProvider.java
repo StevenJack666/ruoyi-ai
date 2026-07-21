@@ -1,6 +1,8 @@
 package org.ruoyi.service.embed.impl;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.util.concurrent.RateLimiter;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.output.Response;
@@ -25,9 +27,11 @@ import java.util.concurrent.TimeUnit;
  */
 @Component("bailianMultiModel")
 @Slf4j
+@SuppressWarnings("UnstableApiUsage")
 public class AliBaiLianMultiEmbeddingProvider implements MultiModalEmbedModelService {
     private final OkHttpClient okHttpClient;
     private ChatModelVo chatModelVo;
+    private static final RateLimiter RATE_LIMITER = RateLimiter.create(1.0);
 
     /**
      * 构造函数，初始化HTTP客户端
@@ -196,14 +200,19 @@ public class AliBaiLianMultiEmbeddingProvider implements MultiModalEmbedModelSer
      * @throws IOException IO异常
      */
     private AliyunMultiModalEmbedResponse executeRequest(AliyunMultiModalEmbedRequest request, ChatModelVo chatModelVo) throws IOException {
+        // 👇 1. 在发送请求前，先获取一个令牌
+        // 如果当前请求速率超过了限制，acquire() 方法会自动阻塞当前线程，直到有可用的令牌
+        RATE_LIMITER.acquire();
+
+        // 👇 2. 原有的请求逻辑保持不变
         String jsonBody = request.toJson();
         RequestBody body = RequestBody.create(jsonBody, MediaType.get("application/json"));
 
         Request httpRequest = new Request.Builder()
-                .url(chatModelVo.getApiHost())
-                .addHeader("Authorization", "Bearer " + chatModelVo.getApiKey())
-                .post(body)
-                .build();
+            .url(chatModelVo.getApiHost())
+            .addHeader("Authorization", chatModelVo.getApiKey())
+            .post(body)
+            .build();
 
         try (okhttp3.Response response = okHttpClient.newCall(httpRequest).execute()) {
             if (!response.isSuccessful()) {
@@ -227,6 +236,8 @@ public class AliBaiLianMultiEmbeddingProvider implements MultiModalEmbedModelSer
      */
     private AliyunMultiModalEmbedResponse parseEmbeddingsFromResponse(String responseBody) throws IOException {
         ObjectMapper objectMapper1 = new ObjectMapper();
+        // 配置忽略未知属性，增强代码的向前兼容性
+        objectMapper1.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         return objectMapper1.readValue(responseBody, AliyunMultiModalEmbedResponse.class);
     }
 

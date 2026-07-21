@@ -8,28 +8,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.core.domain.R;
-import org.ruoyi.domain.UpdateFileRequest;
 import org.ruoyi.domain.dto.ToolConfirmRequest;
 import org.ruoyi.factory.ChatServiceFactory;
 import org.ruoyi.mcp.service.core.ToolConfirmationManager;
-import org.ruoyi.service.chat.AbstractChatService;
 import org.ruoyi.service.chat.impl.ChatServiceFacade;
-import org.ruoyi.service.chat.impl.provider.ProviderImageDescriber;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
-import java.nio.file.FileStore;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Base64;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 
 /**
@@ -57,7 +46,7 @@ public class ChatController {
     @ResponseBody
     public R<List<Long>> uploadSessionFile(
             @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile[] fileList,
-            @Parameter(description = "会话ID", required = true) @RequestParam Long sessionId) {
+            @Parameter(description = "会话ID", required = false) @RequestParam(required = false) Long sessionId) {
         // TODO: 具体逻辑委托给 service 层
         return R.ok(chatService.attachSessionFile(fileList, sessionId));
     }

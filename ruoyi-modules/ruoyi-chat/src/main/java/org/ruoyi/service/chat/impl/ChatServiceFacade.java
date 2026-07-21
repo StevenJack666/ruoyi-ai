@@ -13,6 +13,7 @@ import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.transport.McpTransport;
 import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
+import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -25,12 +26,16 @@ import dev.langchain4j.rag.AugmentationResult;
 import dev.langchain4j.rag.DefaultRetrievalAugmentor;
 import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.query.Metadata;
+import dev.langchain4j.skills.shell.ShellSkills;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 
 import org.ruoyi.agent.*;
+import org.ruoyi.agent.tool.ExecuteSqlQueryTool;
+import org.ruoyi.agent.tool.QueryAllTablesTool;
+import org.ruoyi.agent.tool.QueryTableSchemaTool;
 import org.ruoyi.common.chat.base.ThreadContext;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.chat.domain.dto.request.ReSumeRunner;
@@ -53,6 +58,7 @@ import org.ruoyi.common.redis.utils.RedisUtils;
 import org.ruoyi.common.satoken.utils.LoginHelper;
 import org.ruoyi.common.sse.core.SseEmitterManager;
 import org.ruoyi.common.sse.utils.SseMessageUtils;
+import org.ruoyi.config.McpSseConfig;
 import org.ruoyi.domain.bo.vector.QueryVectorBo;
 import org.ruoyi.domain.entity.knowledge.SessionUploadRecord;
 import org.ruoyi.domain.vo.knowledge.KnowledgeInfoVo;
@@ -135,6 +141,7 @@ public class ChatServiceFacade implements IChatService {
     // ChatServiceFacade 加两个依赖
     private final UploadServiceFactory uploadServiceFactory;                 // OSS上传
     private final SessionUploadRecordMapper recordMapper;
+    private final McpSseConfig mcpSseConfig;
 
     /**
      * 内存实例缓存，避免同一会话重复创建
@@ -368,52 +375,133 @@ public class ChatServiceFacade implements IChatService {
 
      */
     private SseEmitter handleThinkingMode(ChatRequest chatRequest) {
-        Long userId = chatRequest.getUserId();
-
-        McpTransport bingTransport = StreamableHttpMcpTransport.builder()
-            .url("http://127.0.0.1:8085/sse")
-            .logRequests(true)
-            .logResponses(true)
+        // 配置监督者模型
+        QwenChatModel plannerModel = QwenChatModel.builder()
+            .apiKey(chatRequest.getChatModelVo().getApiKey())
+            .modelName(chatRequest.getChatModelVo().getModelName())
             .build();
 
+        // Bing 搜索 MCP 客户端
+        McpTransport bingTransport = new StdioMcpTransport.Builder()
+            .command(List.of("C:\\Program Files\\nodejs\\npx.cmd", "-y", "bing-cn-mcp"))
+            .logEvents(true)
+            .build();
+
+        Long userId = chatRequest.getUserId();
         McpClient bingMcpClient = new DefaultMcpClient.Builder()
             .transport(bingTransport)
             .listener(new MyMcpClientListener(userId))
             .build();
 
-        List<ToolSpecification> toolSpecifications = bingMcpClient.listTools();
-        System.out.println(toolSpecifications);
-
-        // 2. 创建工具提供者
-        ToolProvider mcpToolProvider  = McpToolProvider.builder()
-            .mcpClients(List.of(bingMcpClient))
+        // Playwright MCP 客户端 - 浏览器自动化工具
+        McpTransport playwrightTransport = new StdioMcpTransport.Builder()
+            .command(List.of("C:\\Program Files\\nodejs\\npx.cmd", "-y", "@playwright/mcp@latest"))
+            .logEvents(true)
             .build();
 
+        McpClient playwrightMcpClient = new DefaultMcpClient.Builder()
+            .transport(playwrightTransport)
+            .listener(new MyMcpClientListener(userId))
+            .build();
+
+        // Filesystem MCP 客户端 - 文件管理工具
+        // 允许 AI 读取、写入、搜索文件（基于当前项目根目录）
+        String userDir = System.getProperty("user.dir");
+        McpTransport filesystemTransport = new StdioMcpTransport.Builder()
+            .command(List.of("C:\\Program Files\\nodejs\\npx.cmd", "-y",
+                "@modelcontextprotocol/server-filesystem", userDir))
+            .logEvents(true)
+
+            .build();
+
+        McpClient filesystemMcpClient = new DefaultMcpClient.Builder()
+            .transport(filesystemTransport)
+            .listener(new MyMcpClientListener(userId))
+            .build();
+
+        // HTTP MCP远程客户端 TODO 远程连接可关闭
+        McpTransport httpMcpTransport = StreamableHttpMcpTransport.builder()
+            .url(mcpSseConfig.getUrl())
+            .logRequests(true)
+            .logResponses(true)
+            .build();
+
+        McpClient httpMcpClient = new DefaultMcpClient.Builder()
+            .transport(httpMcpTransport)
+            .listener(new MyMcpClientListener(userId))
+            .build();
+
+        // 合并四个 MCP 客户端的工具
+        ToolProvider toolProvider = McpToolProvider.builder()
+            // bingMcpClient,
+            .mcpClients(List.of(playwrightMcpClient, filesystemMcpClient, httpMcpClient))
+            .build();
+
+        // 结合工具获取拦截器
         ToolProvider interceptedToolProvider = (toolProviderRequest) -> {
             // 获取 MCP 提供的所有工具
-            ToolProviderResult mcpResult = mcpToolProvider.provideTools(toolProviderRequest);
+            ToolProviderResult mcpResult = toolProvider.provideTools(toolProviderRequest);
             ToolProviderResult.Builder builder = ToolProviderResult.builder();
             if (mcpResult != null && mcpResult.tools() != null) {
                 // 遍历所有 MCP 工具
                 for (Map.Entry<ToolSpecification, ToolExecutor> entry : mcpResult.tools().entrySet()) {
                     ToolSpecification spec = entry.getKey();
                     ToolExecutor originalExecutor = entry.getValue();
-                    // 🔥 核心：用你的包装器把原来的执行器包起来
                     ToolExecutor wrappedExecutor = new GobalToolExecutor(originalExecutor, userId);
-                    // 将“原说明书”和“新执行器”绑定
                     builder.add(spec, wrappedExecutor);
                 }
             }
             return builder.build();
         };
 
-//        // 配置监督者模型
-        QwenChatModel plannerModel = QwenChatModel.builder()
-            .apiKey(chatRequest.getChatModelVo().getApiKey())
-            .modelName(chatRequest.getChatModelVo().getModelName())
+        // ========== LangChain4j Skills 基本用法 ==========
+        // 通过 SKILL.md 文件定义，LLM 按需通过 activate_skill 工具加载
+        // 加载 Skills - 使用相对路径，基于项目根目录
+        java.nio.file.Path skillsPath = java.nio.file.Path.of(userDir, "ruoyi-admin/src/main/resources/skills");
+        List<dev.langchain4j.skills.FileSystemSkill> skillsList = dev.langchain4j.skills.FileSystemSkillLoader
+            .loadSkills(skillsPath)
+            ;
+
+        ShellSkills skills = ShellSkills.from(skillsList);
+
+        // 构建子 Agent
+        WebSearchAgent searchAgent  = AgenticServices.agentBuilder(WebSearchAgent.class)
+            .chatModel(plannerModel)
+            .toolProvider(toolProvider)
+            .listener(new MyAgentListener())
             .build();
 
-        BasicAgent basicAgent = AgenticServices.agentBuilder(BasicAgent.class)
+        // 构建子 Agent 2: SkillsAgent - 负责文档处理技能（docx、pdf、xlsx）
+        // 独立管理 Skills 工具
+        SkillsAgent skillsAgent = AgenticServices.agentBuilder(SkillsAgent.class)
+            .chatModel(plannerModel)
+            .systemMessage("You have access to the following skills:\n" + skills.formatAvailableSkills()
+                + "\nWhen the user's request relates to one of these skills, activate it first using the `activate_skill` tool before proceeding.")
+            .toolProvider(skills.toolProvider())
+            .build();
+
+        // 构建子 Agent 3: SqlAgent - 负责数据库查询
+        SqlAgent sqlAgent = AgenticServices.agentBuilder(SqlAgent.class)
+            .chatModel(plannerModel)
+            .tools(new QueryAllTablesTool(), new QueryTableSchemaTool(), new ExecuteSqlQueryTool())
+            .listener(new MyAgentListener())
+            .build();
+
+        // 构建子 Agent 4: ChartGenerationAgent - 负责图表生成
+        ChartGenerationAgent chartGenerationAgent = AgenticServices.agentBuilder(ChartGenerationAgent.class)
+            .chatModel(plannerModel)
+            .listener(new MyAgentListener())
+            .build();
+
+        // 构建子 Agent 5: EchartsAgent - 负责数据可视化（结合 SQL 查询生成 Echarts 图表）
+        EchartsAgent echartsAgent = AgenticServices.agentBuilder(EchartsAgent.class)
+            .chatModel(plannerModel)
+            .tools(new QueryAllTablesTool(), new QueryTableSchemaTool(), new ExecuteSqlQueryTool())
+            .listener(new MyAgentListener())
+            .build();
+
+        // 构建子 Agent 6: HttpMcpAgent - 负责远程连接调用工具
+        HttpMcpAgent httpMcpAgent = AgenticServices.agentBuilder(HttpMcpAgent.class)
             .chatModel(plannerModel)
             .toolProvider(interceptedToolProvider)
             .build();
@@ -422,7 +510,7 @@ public class ChatServiceFacade implements IChatService {
         SupervisorAgent supervisor = AgenticServices.supervisorBuilder()
             .chatModel(plannerModel)
             //.listener(new SupervisorStreamListener(null))
-            .subAgents(basicAgent)
+            .subAgents(skillsAgent,searchAgent, sqlAgent, chartGenerationAgent, echartsAgent, httpMcpAgent)
             // 加入历史上下文 - 使用 ChatMemoryProvider 提供持久化的聊天内存
 //            .chatMemoryProvider(memoryId -> createChatMemory(chatRequest.getSessionId()))
             .responseStrategy(SupervisorResponseStrategy.LAST)
@@ -436,6 +524,11 @@ public class ChatServiceFacade implements IChatService {
                 String result = supervisor.invoke(chatRequest.getContent());
                 SseMessageUtils.sendContent(userId, result);
                 SseMessageUtils.sendDone(userId);
+                // 持久化DB
+                if (StringUtils.isNotEmpty(result)){
+                    chatMessageService.saveChatMessage(userId, chatRequest.getSessionId(),
+                        result, RoleType.ASSISTANT.getName(), chatRequest.getModel());
+                }
             } catch (Exception e) {
                 log.error("Supervisor 执行失败", e);
                 SseMessageUtils.sendError(userId, e.getMessage());
@@ -552,18 +645,18 @@ public class ChatServiceFacade implements IChatService {
         }
 
 
-
-
-
         // 3. 知识库检索增强 (RAG)
-        if (chatRequest.getKnowledgeId() != null) {
-            KnowledgeInfoVo knowledgeInfoVo = knowledgeInfoService.queryById(Long.valueOf(chatRequest.getKnowledgeId()));
+        String knowledgeId = StringUtils.defaultIfEmpty(initKnowledgeId(), StringUtils.EMPTY);
+        if (StringUtils.isNotEmpty(knowledgeId)) {
+            KnowledgeInfoVo knowledgeInfoVo = knowledgeInfoService.queryById(Long.valueOf(knowledgeId));
             if (knowledgeInfoVo != null) {
-
+                // 校验知识库是否公开
+                Long share = knowledgeInfoVo.getShare();
+                boolean isPublic = share != null && share != 0L;
                 // todo 校验当前用户是否有权限访问该知识库
                 ChatModelVo chatModel = chatModelService.selectModelByName(knowledgeInfoVo.getEmbeddingModel());
-                if (chatModel != null) {
-                    log.info("执行高级 RAG 流程: kid={}", chatRequest.getKnowledgeId());
+                if (chatModel != null && isPublic) {
+                    log.info("执行高级 RAG 流程: kid={}", knowledgeId);
 
                     // 构建自定义检索器
                     CustomVectorRetriever retriever = new CustomVectorRetriever(
@@ -823,10 +916,16 @@ public class ChatServiceFacade implements IChatService {
 
     /**
      * 上传模式
-     * @return
      */
     private String initUploadMode(){
         return sysConfigService.selectConfigByKey("upload.mode");
+    }
+
+    /**
+     * 获取默认知识库ID
+     */
+    private String initKnowledgeId(){
+        return sysConfigService.selectConfigByKey("knowledge.default.id");
     }
 }
 

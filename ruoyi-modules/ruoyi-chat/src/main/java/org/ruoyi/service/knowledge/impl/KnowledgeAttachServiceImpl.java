@@ -9,6 +9,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.chat.domain.vo.chat.ChatModelVo;
 import org.ruoyi.common.chat.service.chat.IChatModelService;
+import org.ruoyi.common.core.exception.ServiceException;
+import org.ruoyi.common.oss.domain.vo.SysOssUploadVo;
+import org.ruoyi.common.oss.domain.vo.UploadVo;
+import org.ruoyi.common.oss.enums.UploadModeType;
+import org.ruoyi.common.oss.factory.UploadServiceFactory;
+import org.ruoyi.common.oss.service.IUploadService;
 import org.ruoyi.enums.KnowledgeAttachStatus;
 import org.ruoyi.common.core.domain.dto.OssDTO;
 import org.ruoyi.common.core.service.OssService;
@@ -26,16 +32,23 @@ import org.ruoyi.domain.vo.knowledge.DocFragmentCountVo;
 import org.ruoyi.domain.vo.knowledge.KnowledgeAttachVo;
 import org.ruoyi.domain.vo.knowledge.KnowledgeInfoVo;
 import org.ruoyi.factory.ResourceLoaderFactory;
+import org.ruoyi.factory.VectorStoreStrategyFactory;
 import org.ruoyi.mapper.knowledge.KnowledgeAttachMapper;
 import org.ruoyi.mapper.knowledge.KnowledgeFragmentMapper;
 import org.ruoyi.service.knowledge.IKnowledgeAttachService;
 import org.ruoyi.service.knowledge.IKnowledgeInfoService;
 import org.ruoyi.service.knowledge.ResourceLoader;
 import org.ruoyi.service.vector.VectorStoreService;
+import org.ruoyi.system.service.ISysConfigService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 
 import java.net.URL;
@@ -58,8 +71,10 @@ public class KnowledgeAttachServiceImpl implements IKnowledgeAttachService {
     private final KnowledgeFragmentMapper knowledgeFragmentMapper;
     private final IChatModelService chatModelService;
     private final ResourceLoaderFactory resourceLoaderFactory;
-    private final VectorStoreService vectorStoreService;
+    private final VectorStoreStrategyFactory vectorStoreStrategyFactory;
     private final OssService ossService;
+    private final UploadServiceFactory uploadServiceFactory;
+    private final ISysConfigService sysConfigService;
 
     @Override
     public KnowledgeAttachVo queryById(Long id) {
@@ -124,21 +139,56 @@ public class KnowledgeAttachServiceImpl implements IKnowledgeAttachService {
         return baseMapper.updateById(update) > 0;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid) {
+        for (Long id : ids) {
+            KnowledgeAttach attach = baseMapper.selectById(id);
+            if (attach != null) {
+                // 根据向量ID获取向量实体
+                Long knowledgeId = attach.getKnowledgeId();
+                KnowledgeInfoVo knowledgeInfoVo = knowledgeInfoService.queryById(knowledgeId);
+                if (null == knowledgeInfoVo){
+                    throw new ServiceException("知识库不存在");
+                }
+                // 获取向量存储策略
+                VectorStoreService vectorStoreService = vectorStoreStrategyFactory.getStrategy(knowledgeInfoVo.getVectorModel());
+                vectorStoreService.removeByDocId(attach.getDocId(), String.valueOf(attach.getKnowledgeId()));
+                knowledgeFragmentMapper.delete(Wrappers.<KnowledgeFragment>lambdaQuery()
+                    .eq(KnowledgeFragment::getDocId, attach.getDocId()));
+                log.info("删除附件: id={}, name={}", attach.getId(), attach.getName());
+            }
+        }
         return baseMapper.deleteByIds(ids) > 0;
     }
 
     @Override
     public void upload(KnowledgeInfoUploadBo bo) {
         MultipartFile file = bo.getFile();
-        OssDTO ossDTO = ossService.uploadFile(file);
+        // 上传文件
+        String actualCode = StringUtils.defaultIfEmpty(initUploadMode(), UploadModeType.DEFAULT.getCode());
+        IUploadService uploadService = uploadServiceFactory.getOriginalService(actualCode);
+        MultipartFile[] files = {file};
+        UploadVo uploadVo = uploadService.upload(files);
+        List<SysOssUploadVo> uploadVos = uploadVo.getUploadVos();
+        if (CollectionUtils.isEmpty(uploadVos)){
+            throw new ServiceException("上传文件信息异常");
+        }
+        SysOssUploadVo ossUploadVo = uploadVos.getFirst();
 
+        // 根据向量ID获取向量实体
+        Long knowledgeId = bo.getKnowledgeId();
+        KnowledgeInfoVo knowledgeInfoVo = knowledgeInfoService.queryById(knowledgeId);
+        if (null == knowledgeInfoVo){
+            throw new ServiceException("知识库不存在");
+        }
+        // 获取向量存储策略
+        VectorStoreService vectorStoreService = vectorStoreStrategyFactory.getStrategy(knowledgeInfoVo.getVectorModel());
         // 同一知识库下同名文件，先删旧的（附件 + 切片 + 向量）
-        String fileName = ossDTO.getOriginalName();
+        String fileName = file.getOriginalFilename();
         List<KnowledgeAttach> exists = baseMapper.selectList(
             Wrappers.<KnowledgeAttach>lambdaQuery()
-                .eq(KnowledgeAttach::getKnowledgeId, bo.getKnowledgeId())
+                .eq(KnowledgeAttach::getKnowledgeId, knowledgeId)
                 .eq(KnowledgeAttach::getName, fileName));
         for (KnowledgeAttach old : exists) {
             vectorStoreService.removeByDocId(old.getDocId(), String.valueOf(old.getKnowledgeId()));
@@ -149,11 +199,11 @@ public class KnowledgeAttachServiceImpl implements IKnowledgeAttachService {
         }
 
         KnowledgeAttach knowledgeAttach = new KnowledgeAttach();
-        knowledgeAttach.setKnowledgeId(bo.getKnowledgeId());
-        knowledgeAttach.setOssId(ossDTO.getOssId());
+        knowledgeAttach.setKnowledgeId(knowledgeId);
+        knowledgeAttach.setOssId(Long.valueOf(ossUploadVo.getOssId()));
         knowledgeAttach.setDocId(RandomUtil.randomString(10));
-        knowledgeAttach.setName(ossDTO.getOriginalName());
-        knowledgeAttach.setType(ossDTO.getFileSuffix());
+        knowledgeAttach.setName(fileName);
+        knowledgeAttach.setType(ossUploadVo.getFileType());
         knowledgeAttach.setStatus(KnowledgeAttachStatus.WAITING.getCode()); // 待解析
 
         baseMapper.insert(knowledgeAttach);
@@ -188,8 +238,11 @@ public class KnowledgeAttachServiceImpl implements IKnowledgeAttachService {
             }
             OssDTO ossDTO = ossDTOs.get(0);
             String content;
+            String urlStr = ossDTO.getUrl();
             ResourceLoader resourceLoader = resourceLoaderFactory.getLoaderByFileType(attach.getType());
-            try (InputStream inputStream = new URL(ossDTO.getUrl()).openStream()) {
+            try (InputStream inputStream = urlStr.startsWith("http://") || urlStr.startsWith("https://") ?
+                    new URL(urlStr).openStream() : new FileInputStream(urlStr)) {
+                // 3. 统一读取内容
                 content = resourceLoader.getContent(inputStream);
             }
             List<String> chunkList = resourceLoader.getChunkList(content, String.valueOf(knowledgeId));
@@ -214,6 +267,8 @@ public class KnowledgeAttachServiceImpl implements IKnowledgeAttachService {
             }
 
             KnowledgeInfoVo knowledgeInfoVo = knowledgeInfoService.queryById(knowledgeId);
+            // 获取向量存储策略
+            VectorStoreService vectorStoreService = vectorStoreStrategyFactory.getStrategy(knowledgeInfoVo.getVectorModel());
             ChatModelVo chatModelVo = chatModelService.selectModelByName(knowledgeInfoVo.getEmbeddingModel());
 
             StoreEmbeddingBo storeEmbeddingBo = new StoreEmbeddingBo();
@@ -236,5 +291,12 @@ public class KnowledgeAttachServiceImpl implements IKnowledgeAttachService {
             attach.setRemark(StringUtils.substring(e.getMessage(), 0, 255)); // 保存错误原因，截取防止溢出
             baseMapper.updateById(attach);
         }
+    }
+
+    /**
+     * 上传模式
+     */
+    private String initUploadMode(){
+        return sysConfigService.selectConfigByKey("upload.mode");
     }
 }

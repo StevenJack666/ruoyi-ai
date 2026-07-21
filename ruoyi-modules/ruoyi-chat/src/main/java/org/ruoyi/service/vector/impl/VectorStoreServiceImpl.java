@@ -39,6 +39,13 @@ public class VectorStoreServiceImpl implements VectorStoreService {
         return strategyFactory.getStrategy();
     }
 
+    /**
+     * 获取当前配置的向量库策略(注入)
+     */
+    private VectorStoreService getCurrentStrategy(String vectorModelName) {
+        return strategyFactory.getStrategy(vectorModelName);
+    }
+
     @Override
     public void createSchema(String kid, String modelName) {
         VectorStoreService strategy = getCurrentStrategy();
@@ -64,7 +71,7 @@ public class VectorStoreServiceImpl implements VectorStoreService {
     @Override
     public List<KnowledgeRetrievalVo> search(QueryVectorBo queryVectorBo) {
         log.info("执行测试搜索: kid={}, query={}", queryVectorBo.getKid(), queryVectorBo.getQuery());
-        VectorStoreService strategy = getCurrentStrategy();
+        VectorStoreService strategy = getCurrentStrategy(queryVectorBo.getVectorModelName());
         return strategy.search(queryVectorBo);
     }
 

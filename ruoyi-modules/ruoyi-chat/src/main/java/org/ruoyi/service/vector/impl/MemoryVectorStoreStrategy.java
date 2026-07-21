@@ -34,6 +34,7 @@ import java.util.stream.IntStream;
  */
 @Slf4j
 @Component("memory")
+
 public class MemoryVectorStoreStrategy extends AbstractVectorStoreStrategy {
 
     private final KnowledgeFragmentMapper fragmentMapper;

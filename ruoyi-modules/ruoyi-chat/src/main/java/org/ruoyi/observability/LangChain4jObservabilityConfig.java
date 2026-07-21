@@ -33,6 +33,7 @@ import java.util.List;
 public class LangChain4jObservabilityConfig {
 
     private final AiServiceListenerRegistrar registrar = AiServiceListenerRegistrar.newInstance();
+    private final ToolConfirmationManager confirmationManager;
 
     /**
      * 注册 AI 服务级别的事件监听器

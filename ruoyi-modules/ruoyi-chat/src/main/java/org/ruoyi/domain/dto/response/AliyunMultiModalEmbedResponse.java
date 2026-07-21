@@ -38,7 +38,8 @@ public record AliyunMultiModalEmbedResponse(
             int input_tokens,  // 本次请求输入的 Token 数量
             int image_tokens,  // 本次请求输入的图像 Token 数量
             int image_count,   // 本次请求输入的图像数量
-            int duration       // 本次请求输入的视频时长（秒）
+            int duration,       // 本次请求输入的视频时长（秒）
+            int total_tokens   //  本次请求的总 Token 数量
     ) {
     }
 }

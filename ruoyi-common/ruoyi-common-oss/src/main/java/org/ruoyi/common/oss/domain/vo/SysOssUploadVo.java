@@ -30,4 +30,9 @@ public class SysOssUploadVo {
      */
     private String filePath;
 
+    /**
+     * 文件类型
+     */
+    private String fileType;
+
 }
