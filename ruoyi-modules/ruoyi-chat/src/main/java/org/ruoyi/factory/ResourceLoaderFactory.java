@@ -30,7 +30,10 @@ public class ResourceLoaderFactory {
             return new CodeFileLoader(codeTextSplitter);
         } else if (FileTypeConstants.isExcel(fileType)) {
             return new ExcelFileLoader(excelTextSplitter);
-        } else {
+        } else if (FileTypeConstants.isImageFile(fileType)) {
+            return new ImageOcrLoader(characterTextSplitter);
+        }
+        else {
             return new TextFileLoader(characterTextSplitter);
         }
     }
