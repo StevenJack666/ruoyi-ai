@@ -26,13 +26,17 @@ import org.ruoyi.common.oss.constant.OssConstant;
 import org.ruoyi.common.oss.core.OssClient;
 import org.ruoyi.common.oss.entity.UploadResult;
 import org.ruoyi.common.oss.enums.AccessPolicyType;
+import org.ruoyi.common.oss.enums.UploadModeType;
 import org.ruoyi.common.oss.factory.OssFactory;
 import org.ruoyi.common.oss.domain.SysOss;
+import org.ruoyi.common.oss.factory.UploadServiceFactory;
+import org.ruoyi.common.oss.service.IUploadService;
 import org.ruoyi.system.domain.SysOssExt;
 import org.ruoyi.common.oss.domain.bo.SysOssBo;
 import org.ruoyi.common.oss.domain.vo.SysOssUploadVo;
 import org.ruoyi.common.oss.domain.vo.SysOssVo;
 import org.ruoyi.system.mapper.SysOssMapper;
+import org.ruoyi.system.service.ISysConfigService;
 import org.ruoyi.system.service.ISysOssService;
 import org.jetbrains.annotations.NotNull;
 import org.ruoyi.system.utils.QwenFileUploadUtils;
@@ -43,8 +47,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -76,6 +79,12 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
     // 上传文件服务器地址
     @Value("${sys.upload.path}")
     private String UPLOAD_PATH;
+
+    // 系统参数配置
+    private final ISysConfigService sysConfigService;
+
+    // 文件上传工厂
+    private final UploadServiceFactory uploadServiceFactory;
 
     /**
      * 查询OSS对象存储列表
@@ -199,10 +208,17 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
         if (ObjectUtil.isNull(sysOss)) {
             throw new ServiceException("文件数据不存在!");
         }
+
+        // 1. 设置响应头（告诉浏览器以附件形式下载，并指定文件名）
         FileUtils.setAttachmentResponseHeader(response, sysOss.getOriginalName());
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE + "; charset=UTF-8");
-        OssClient storage = OssFactory.instance(sysOss.getService());
-        storage.download(sysOss.getFileName(), response.getOutputStream(), response::setContentLengthLong);
+
+        // 2. 获取本地文件对象
+        String actualCode = StringUtils.defaultIfEmpty(initUploadMode(), UploadModeType.DEFAULT.getCode());
+        IUploadService uploadService = uploadServiceFactory.getOriginalService(actualCode);
+
+        // 3. 调用工厂的下载接口
+        uploadService.download(sysOss.getUrl(), response);
     }
 
     /**
@@ -390,5 +406,12 @@ public class SysOssServiceImpl implements ISysOssService, OssService {
             throw new ServiceException("请先配置Qwen上传文件相关API_HOST");
         }
         API_HOST = apiHost;
+    }
+
+    /**
+     * 上传模式
+     */
+    private String initUploadMode(){
+        return sysConfigService.selectConfigByKey("upload.mode");
     }
 }
