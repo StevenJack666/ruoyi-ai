@@ -39,6 +39,14 @@ public class FileTypeConstants {
     public static final String YAML = "yaml";
     public static final String YML = "yml";
 
+    // 【新增】图片文件常量
+    public static final String JPG = "jpg";
+    public static final String JPEG = "jpeg";
+    public static final String PNG = "png";
+    public static final String BMP = "bmp";
+    public static final String GIF = "gif";
+    public static final String WEBP = "webp";
+
     public static boolean isTextFile(String type) {
         if (type.equalsIgnoreCase(TXT) || type.equalsIgnoreCase(CSV) || type.equalsIgnoreCase(PROPERTIES)
                 || type.equalsIgnoreCase(INI) || type.equalsIgnoreCase(YAML) || type.equalsIgnoreCase(YML)
@@ -93,4 +101,13 @@ public class FileTypeConstants {
         }
     }
 
+    // 【新增】判断是否为图片文件
+    public static boolean isImageFile(String type) {
+        if (type.equalsIgnoreCase(JPG) || type.equalsIgnoreCase(JPEG) || type.equalsIgnoreCase(PNG)
+            || type.equalsIgnoreCase(BMP) || type.equalsIgnoreCase(GIF) || type.equalsIgnoreCase(WEBP)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 }
