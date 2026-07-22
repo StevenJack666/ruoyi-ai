@@ -118,4 +118,9 @@ public class KnowledgeInfoBo extends BaseEntity {
      */
     private String remark;
 
+    /**
+     * 是否自动解析 (true: 立即解析, false: 仅上传)
+     */
+    private Boolean autoParse;
+
 }
