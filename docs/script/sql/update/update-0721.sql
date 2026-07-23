@@ -7,3 +7,11 @@ INSERT INTO `sys_config` (`config_id`, `tenant_id`, `config_name`, `config_key`,
 ALTER TABLE knowledge_fragment ADD FULLTEXT(content);
 
 ALTER TABLE `knowledge_info` ADD COLUMN `auto_parse` tinyint(4) NULL DEFAULT NULL COMMENT '是否自动解析 (true: 立即解析, false: 仅上传)' AFTER `hybrid_alpha`;
+
+INSERT INTO `sys_menu` VALUES (3000, '智能体管理', 0, 1, 'agent', '', '', 1, 0, 'M', '0', '0', '', 'mdi:robot', 103, 1, '2026-07-07 21:37:37', NULL, NULL, '智能体管理目录');
+INSERT INTO `sys_menu` VALUES (3001, '智能体列表', 3000, 1, 'agent', 'agent/agent/index', '', 1, 0, 'C', '0', '0', 'agent:agent:list', 'mdi:robot-outline', 103, 1, '2026-07-07 21:37:37', NULL, NULL, '智能体列表菜单');
+INSERT INTO `sys_menu` VALUES (3002, '智能体查询', 3001, 1, '#', '', '', 1, 0, 'F', '0', '0', 'agent:agent:query', '#', 103, 1, '2026-07-07 21:37:37', NULL, NULL, '');
+INSERT INTO `sys_menu` VALUES (3003, '智能体新增', 3001, 2, '#', '', '', 1, 0, 'F', '0', '0', 'agent:agent:add', '#', 103, 1, '2026-07-07 21:37:37', NULL, NULL, '');
+INSERT INTO `sys_menu` VALUES (3004, '智能体修改', 3001, 3, '#', '', '', 1, 0, 'F', '0', '0', 'agent:agent:edit', '#', 103, 1, '2026-07-07 21:37:37', NULL, NULL, '');
+INSERT INTO `sys_menu` VALUES (3005, '智能体删除', 3001, 4, '#', '', '', 1, 0, 'F', '0', '0', 'agent:agent:remove', '#', 103, 1, '2026-07-07 21:37:37', NULL, NULL, '');
+INSERT INTO `sys_menu` VALUES (3006, '智能体导出', 3001, 5, '#', '', '', 1, 0, 'F', '0', '0', 'agent:agent:export', '#', 103, 1, '2026-07-07 21:37:37', NULL, NULL, '');

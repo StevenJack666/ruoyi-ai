@@ -21,8 +21,14 @@ import java.util.List;
 @Data
 public class ChatRequest {
 
-    @NotEmpty(message = "传入的模型不能为空")
     private String model;
+
+    /**
+     * 智能体ID。传入时后端按智能体配置解析模型/工具/技能/知识库/提示词/是否深度思考。
+     */
+    @JsonSerialize(using = ToStringSerializer.class)
+    @JSONField(serializeUsing = String.class)
+    private Long agentId;
 
     /**
      * 对话消息
