@@ -30,6 +30,11 @@ public class McpToolListResult {
     private List<McpTool> data;
 
     /**
+     * 消息状态码
+     */
+    private int code;
+
+    /**
      * 总数
      */
     private int total;
@@ -37,6 +42,7 @@ public class McpToolListResult {
     public static McpToolListResult of(List<McpTool> data) {
         return McpToolListResult.builder()
             .success(true)
+            .code(200)
             .data(data)
             .total(data != null ? data.size() : 0)
             .build();
