@@ -50,7 +50,7 @@ public class KnowledgeInfoVo implements Serializable {
      */
     @ExcelProperty(value = "是否公开知识库", converter = ExcelDictConvert.class)
     @ExcelDictFormat(readConverterExp = "0=,否=,1=是")
-    private Long share;
+    private Integer share;
 
     /**
      * 知识库描述
@@ -148,5 +148,10 @@ public class KnowledgeInfoVo implements Serializable {
     @ExcelProperty(value = "备注")
     private String remark;
 
-
+    /**
+     * 是否自动解析 (true: 立即解析, false: 仅上传)
+     */
+    @ExcelProperty(value = "是否自动解析", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(readConverterExp = "0=,否=,1=是")
+    private Boolean autoParse;
 }

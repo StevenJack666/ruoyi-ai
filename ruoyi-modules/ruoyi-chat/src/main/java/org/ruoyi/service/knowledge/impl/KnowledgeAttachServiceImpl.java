@@ -208,7 +208,7 @@ public class KnowledgeAttachServiceImpl implements IKnowledgeAttachService {
 
         baseMapper.insert(knowledgeAttach);
 
-        if (Boolean.TRUE.equals(bo.getAutoParse())) {
+        if (Boolean.TRUE.equals(knowledgeInfoVo.getAutoParse())) {
             // 通过 SpringUtils 获取代理对象，确保 @Async 生效
             SpringUtils.getBean(IKnowledgeAttachService.class).parse(knowledgeAttach.getId());
         }

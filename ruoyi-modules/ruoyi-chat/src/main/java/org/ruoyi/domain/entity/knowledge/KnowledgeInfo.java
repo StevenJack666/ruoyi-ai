@@ -40,7 +40,7 @@ public class KnowledgeInfo extends BaseEntity {
     /**
      * 是否公开知识库（0 否 1是）
      */
-    private Long share;
+    private Integer share;
 
     /**
      * 知识库描述
@@ -112,6 +112,11 @@ public class KnowledgeInfo extends BaseEntity {
      * 混合检索权重 (0.0-1.0)
      */
     private Double hybridAlpha;
+
+    /**
+     * 是否自动解析 (true: 立即解析, false: 仅上传)
+     */
+    private Boolean autoParse;
 
     /**
      * 备注
