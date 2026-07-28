@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.chat.domain.dto.request.ChatRequest;
 import org.ruoyi.common.core.domain.R;
 import org.ruoyi.domain.dto.ToolConfirmRequest;
+import org.ruoyi.factory.ChatServiceFactory;
 import org.ruoyi.mcp.service.core.ToolConfirmationManager;
 import org.ruoyi.service.chat.impl.ChatServiceFacade;
 import org.springframework.http.MediaType;
@@ -35,6 +36,7 @@ public class ChatController {
 
     private final ChatServiceFacade chatService;
     private final ToolConfirmationManager toolConfirmationManager;
+    private final ChatServiceFactory chatServiceFactory;
 
     /**
      * 会话文档上传（仅本次对话有效，Redis缓存，30分钟过期）
@@ -44,7 +46,7 @@ public class ChatController {
     @ResponseBody
     public R<List<Long>> uploadSessionFile(
         @Parameter(description = "上传的文件", required = true) @RequestParam MultipartFile[] fileList,
-        @Parameter(description = "会话ID", required = true) @RequestParam Long sessionId) {
+        @Parameter(description = "会话ID", required = false) @RequestParam(required = false) Long sessionId) {
         // TODO: 具体逻辑委托给 service 层
         return R.ok(chatService.attachSessionFile(fileList, sessionId));
     }

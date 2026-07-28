@@ -16,6 +16,6 @@ public class GetCurrentTimeStrategy extends AbstractToolInterceptStrategy {
     @Override
     public InterceptResult onBeforeExecute(String toolName, String argumentsJson, Long userId) {
         log.info("🔥 触发 getCurrentTime 专属拦截逻辑");
-        return new InterceptResult(true, "", ""); // 返回 true，表示继续执行原来的 MCP 工具
+        return new InterceptResult(false, "", ""); // 返回 true，表示继续执行原来的 MCP 工具
     }
 }

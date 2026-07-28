@@ -98,6 +98,7 @@ public class DefaultUploadServiceImpl implements IUploadService {
         uploadVo.setFileName(prefix);
         uploadVo.setOssId(oss.getOssId().toString());
         uploadVo.setFilePath(filePath);
+        uploadVo.setFileType(suffix);
         return uploadVo;
     }
 

@@ -47,4 +47,20 @@ public class VectorStoreStrategyFactory {
         log.debug("使用向量库策略: {}", vectorStoreType);
         return strategy;
     }
+
+    /**
+     * 获取当前配置的向量库策略(根据入参获取策略)
+     */
+    public VectorStoreService getStrategy(String vectorStoreType) {
+        if (vectorStoreType == null || vectorStoreType.trim().isEmpty()) {
+            vectorStoreType = "weaviate";
+        }
+        VectorStoreService strategy = strategies.get(vectorStoreType.toLowerCase());
+        if (strategy == null) {
+            log.warn("未找到向量库策略: {}, 使用默认: weaviate", vectorStoreType);
+            strategy = strategies.get("weaviate");
+        }
+        log.debug("使用向量库策略: {}", vectorStoreType);
+        return strategy;
+    }
 }

@@ -43,7 +43,7 @@ public class GobalToolExecutor implements ToolExecutor {
                     log.info("🛑 工具 [{}] 已被策略拦截，开始阻塞等待用户确认...", toolName);
                     Map<String, Object> args = Json.fromJson(request.arguments(), Map.class);
                     String confirmId = confirmationManager.createConfirmation(userId, toolName, args);
-                    // 假设最长等待 5 分钟
+                    // 假设最长等待 2 分钟
                     boolean approved = confirmationManager.waitForConfirmation(confirmId);
                     if (!approved) {
                         log.info("❌ 用户拒绝或超时，取消工具调用: {}", toolName);
