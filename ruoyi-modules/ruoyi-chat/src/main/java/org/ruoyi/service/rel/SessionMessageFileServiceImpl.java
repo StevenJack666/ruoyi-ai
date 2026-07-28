@@ -1,11 +1,13 @@
 package org.ruoyi.service.rel;
 
+import cn.hutool.core.collection.CollUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.chat.entity.rel.SessionMessageFileRel;
 import org.ruoyi.common.chat.service.rel.ISessionMessageFileService;
+import org.ruoyi.domain.entity.knowledge.SessionUploadRecord;
 import org.ruoyi.mapper.rel.SessionMessageFileMapper;
 import org.springframework.stereotype.Service;
 
@@ -39,5 +41,16 @@ public class SessionMessageFileServiceImpl implements ISessionMessageFileService
         for (SessionMessageFileRel sessionMessageFileRel : sessionMessageFileRelList) {
             baseMapper.insert(sessionMessageFileRel);
         }
+    }
+
+    @Override
+    public List<Long> selectOssIdsBySessionId(Long sessionId) {
+        LambdaQueryWrapper<SessionMessageFileRel> lqw = Wrappers.lambdaQuery();
+        lqw.eq(SessionMessageFileRel::getSessionId, sessionId);
+        List<SessionMessageFileRel> sessionMessageFileRelList = baseMapper.selectList(lqw);
+        if (CollUtil.isEmpty(sessionMessageFileRelList)){
+            return List.of();
+        }
+        return sessionMessageFileRelList.stream().map(SessionMessageFileRel::getOssFileId).toList();
     }
 }

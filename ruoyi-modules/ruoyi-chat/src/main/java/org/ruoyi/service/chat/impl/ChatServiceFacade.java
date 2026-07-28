@@ -77,6 +77,7 @@ import org.ruoyi.mcp.service.core.ToolProviderFactory;
 import org.ruoyi.observability.*;
 import org.ruoyi.service.IntelAnalysisService;
 import org.ruoyi.service.chat.AbstractChatService;
+import org.ruoyi.service.chat.FileParseAsyncService;
 import org.ruoyi.service.chat.IChatMessageService;
 import org.ruoyi.service.chat.IChatSessionService;
 import org.ruoyi.service.chat.impl.memory.PersistentChatMemoryStore;
@@ -151,6 +152,9 @@ public class ChatServiceFacade implements IChatService {
     private final IntelAnalysisStrategyFactory intelAnalysisStrategyFactory;
     private final ISysUserService sysUserService;
     private final IChatSessionService chatSessionService;
+    // Redis上传文件的前缀Key
+    private final String UPLOAD_REDIS_PREFIX_KEY = "session:docs:oss:";
+    private final FileParseAsyncService fileParseAsyncService;
 
     /**
      * 内存实例缓存，避免同一会话重复创建
@@ -171,86 +175,19 @@ public class ChatServiceFacade implements IChatService {
     // ChatServiceFacade.java
     // todo 文件上传，应该返回文件列表
     public List<Long> attachSessionFile(MultipartFile[] fileList, Long sessionId) {
-        if (fileList == null){
+        if (fileList == null || fileList.length == 0) {
             throw new ServiceException("上传的文件列表为空");
         }
+
         List<Long> fileOssIds = new ArrayList<>();
-        List<String> docChunk = new ArrayList<>();
+        Long userId = LoginHelper.getUserId();
+
+        String actualCode = StringUtils.defaultIfEmpty(initUploadMode(), UploadModeType.DEFAULT.getCode());
+        IUploadService uploadService = uploadServiceFactory.getOriginalService(actualCode);
+
         for (MultipartFile file : fileList) {
-            String fileName = file.getOriginalFilename();
-            String ext = fileName.substring(fileName.lastIndexOf("."));
-            long fileSize = file.getSize();
-            Long userId = LoginHelper.getUserId();
-            log.info("上传文件: fileName={}, fileSize={}", fileName, fileSize);
-
-            // 1. 获取文件字节数组（防止流被消费 导致NoSuchFileException）
-            byte[] fileBytes;
-            try (InputStream is = file.getInputStream()) {
-                fileBytes = is.readAllBytes();
-            } catch (IOException e) {
-                log.error("会话文档读取失败: fileName={}", fileName, e);
-                throw new ServiceException("文件读取失败，请重试");
-            }
-
-            // 2. OSS持久化原始文件（用于溯源）
-            String actualCode = StringUtils.defaultIfEmpty(initUploadMode(), UploadModeType.DEFAULT.getCode());
-            IUploadService uploadService = uploadServiceFactory.getOriginalService(actualCode);
-            // 将文件上传成数组
-            MultipartFile[] files = {file};
-            UploadVo uploadVo = uploadService.upload(files);
-
-            List<SysOssUploadVo> uploadVos = uploadVo.getUploadVos();
-            if (CollectionUtils.isEmpty(uploadVos)){
-                throw new ServiceException("上传文件信息异常");
-            }
-
-            // 3. 写入上传记录（失败不影响主流程，仅记日志）
-            for (SysOssUploadVo sysOssUploadVo : uploadVos) {
-                try {
-                    SessionUploadRecord record = new SessionUploadRecord();
-                    record.setUserId(userId);
-                    record.setSessionId(sessionId);
-                    record.setFileName(fileName);
-                    record.setFileType(ext);
-                    record.setFileSize(fileSize);
-                    Long ossId = Long.parseLong(sysOssUploadVo.getOssId());
-                    fileOssIds.add(ossId);
-                    record.setOssId(ossId);
-                    record.setOssUrl(sysOssUploadVo.getUrl());
-                    recordMapper.insert(record);
-                } catch (Exception e) {
-                    log.error("上传记录写入失败: fileName={}", fileName, e);
-                    // 不抛异常，不影响后续解析
-                }
-            }
-
-            // 4. 解析 todo，可以做成异步的，保障前端体验
-            ResourceLoader loader = resourceLoaderFactory.getLoaderByFileType(ext);
-            String text;
-            try (InputStream is = new ByteArrayInputStream(fileBytes)) { // try-with-resources 自动关流
-                text = loader.getContent(is);
-            } catch (IOException e) {
-                log.error("会话文档读取失败: fileName={}", fileName, e);
-                throw new ServiceException("文件读取失败，请重试");
-            }
-
-            // 5. 分块
-            List<String> chunks = loader.getChunkList(text, null);
-            if (CollUtil.isEmpty(chunks)) {
-                log.warn("会话文档分块为空: fileName={}", fileName);
-                return fileOssIds;
-            }
-            docChunk.addAll(chunks);
-        }
-        // 6. 存储缓存
-        try {
-            String cacheKey = "session:docs:" + sessionId;
-            RedisUtils.deleteObject(cacheKey);
-            RedisUtils.setCacheList(cacheKey, docChunk);
-            RedisUtils.expire(cacheKey, Duration.ofMinutes(30));
-        } catch (Exception e) {
-            log.error("会话文档缓存失败: sessionId={}", sessionId, e);
-            throw new ServiceException("文档缓存失败，请重试");
+            Long ossId = processSingleFile(file, uploadService, sessionId, userId);
+            fileOssIds.add(ossId);
         }
         return fileOssIds;
     }
@@ -698,29 +635,38 @@ public class ChatServiceFacade implements IChatService {
         UserMessage userMessage = UserMessage.userMessage(chatRequest.getContent());
         // 2. 会话文档检索（上传消息全量注入，追问走关键词检索）
         String sessionDocContext = null;
-        if (chatRequest.getSessionId() != null) {
-            String cacheKey = "session:docs:" + chatRequest.getSessionId();
-            List<String> chunks = RedisUtils.getCacheList(cacheKey);
-            if (!CollUtil.isEmpty(chunks)) {
-                boolean isUpload = chatRequest.getIsUploadFile() != null && chatRequest.getIsUploadFile();
-                if (isUpload) {
-                    // 上传消息：全量注入，确保模型能完整分析文档
-                    sessionDocContext = buildSessionContext(chunks);
-                    log.info("会话文档全量注入: sessionId={}, 分块数={}", chatRequest.getSessionId(), chunks.size());
-                } else {
-                    // 追问消息：关键词检索
-                    List<String> matchedChunks = searchSessionDocs(
-                        chatRequest.getSessionId(), chatRequest.getContent());
-                    if (!CollUtil.isEmpty(matchedChunks)) {
-                        sessionDocContext = buildSessionContext(matchedChunks);
+        StringBuilder docContextBuilder = new StringBuilder();
+        List<Long> ossIds = chatRequest.getOssIds();
+        // 如果是追问（没有带新文件），则从当前会话的历史记录中获取已绑定的文件
+        if (CollectionUtils.isEmpty(ossIds) && chatRequest.getSessionId() != null) {
+            ossIds = sessionMessageFileService.selectOssIdsBySessionId(chatRequest.getSessionId());
+        }
+        // 上传文件操作
+        if (CollUtil.isNotEmpty(ossIds)) {
+            boolean isUpload = Boolean.TRUE.equals(chatRequest.getIsUploadFile());
+            for (Long ossId : ossIds) {
+                if (ossId == null) continue;
+                String cacheKey = UPLOAD_REDIS_PREFIX_KEY + ossId;
+                List<String> chunks = RedisUtils.getCacheList(cacheKey);
+                if (CollUtil.isNotEmpty(chunks)) {
+                    if (isUpload) {
+                        // 上传消息：全量注入，确保模型能完整分析新文档
+                        docContextBuilder.append(buildSessionContext(chunks));
+                        log.info("会话文档全量注入: ossId={}, 分块数={}", ossId, chunks.size());
+                    } else {
+                        // 追问消息：基于关键词检索（RAG 模式），节省 Token
+                        List<String> matchedChunks = searchSessionDocs(chunks, chatRequest.getContent());
+                        if (!CollUtil.isEmpty(matchedChunks)) {
+                            docContextBuilder.append(buildSessionContext(matchedChunks));
+                        }
                     }
                 }
             }
         }
 
-
-
-
+        if (!docContextBuilder.isEmpty()){
+            sessionDocContext = docContextBuilder.toString();
+        }
 
         // 3. 知识库检索增强 (RAG)
         if (chatRequest.getKnowledgeId() != null) {
@@ -935,44 +881,38 @@ public class ChatServiceFacade implements IChatService {
     /**
      * 搜索当前会话上传的文档，返回匹配的关键分块
      */
-     /**
-      * 搜索当前会话上传的文档，返回匹配的关键分块
-      * 无关键词命中时降级为全量返回（最多20条）
-      */
-    private List<String> searchSessionDocs(Long sessionId, String query) {
-         String cacheKey = "session:docs:" + sessionId;
-         List<String> chunks = RedisUtils.getCacheList(cacheKey);
-         if (chunks == null || chunks.isEmpty()) {
-             return Collections.emptyList();
-         }
+    /**
+     * 搜索当前会话上传的文档，返回匹配的关键分块
+     * 无关键词命中时降级为全量返回（最多20条）
+     */
+    private List<String> searchSessionDocs(List<String> chunks, String query) {
+        // 将用户问题分词
+        Set<String> queryTokens = Arrays.stream(query.split("[，。、；：？！\\s]+"))
+            .filter(t -> t.length() >= 2)
+            .collect(Collectors.toSet());
 
-         // 将用户问题分词
-         Set<String> queryTokens = Arrays.stream(query.split("[，。、；：？！\\s]+"))
-                 .filter(t -> t.length() >= 2)
-                 .collect(Collectors.toSet());
+        List<String> matched;
+        if (queryTokens.isEmpty()) {
+            matched = new ArrayList<>(chunks);
+        } else {
+            // 按命中关键词数排序
+            matched = chunks.stream()
+                .map(chunk -> {
+                    long hits = queryTokens.stream().filter(chunk::contains).count();
+                    return Map.entry(chunk, hits);
+                })
+                .filter(e -> e.getValue() > 0)
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        }
 
-         List<String> matched;
-         if (queryTokens.isEmpty()) {
-             matched = new ArrayList<>(chunks);
-         } else {
-             // 按命中关键词数排序
-             matched = chunks.stream()
-                     .map(chunk -> {
-                         long hits = queryTokens.stream().filter(chunk::contains).count();
-                         return Map.entry(chunk, hits);
-                     })
-                     .filter(e -> e.getValue() > 0)
-                     .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
-                     .map(Map.Entry::getKey)
-                     .collect(Collectors.toList());
-         }
+        // 无命中时降级返回全量，防超大文档加安全上限
+        if (matched.isEmpty() || matched.size() < 5) {
+            return chunks.size() > 20 ? chunks.subList(0, 20) : chunks;
+        }
 
-         // 无命中时降级返回全量，防超大文档加安全上限
-         if (matched.isEmpty() || matched.size() < 5) {
-             return chunks.size() > 20 ? chunks.subList(0, 20) : chunks;
-         }
-
-         return matched.stream().limit(5).collect(Collectors.toList());
+        return matched.stream().limit(5).collect(Collectors.toList());
     }
 
 
@@ -994,6 +934,55 @@ public class ChatServiceFacade implements IChatService {
      */
     private String initUploadMode(){
         return sysConfigService.selectConfigByKey("upload.mode");
+    }
+
+    /**
+     * 处理单个文件的完整链路（上传、记录、异步解析）
+     */
+    private Long processSingleFile(MultipartFile file, IUploadService uploadService, Long sessionId, Long userId) {
+        String fileName = file.getOriginalFilename();
+        String ext = fileName.substring(fileName.lastIndexOf("."));
+        long fileSize = file.getSize();
+        log.info("上传文件: fileName={}, fileSize={}", fileName, fileSize);
+
+        // 1. 获取文件字节数组（防止流被消费导致 NoSuchFileException）
+        byte[] fileBytes;
+        try {
+            fileBytes = file.getBytes();
+        } catch (IOException e) {
+            log.error("会话文档读取失败: fileName={}", fileName, e);
+            throw new ServiceException("文件读取失败，请重试");
+        }
+
+        // 2. 上传文件
+        MultipartFile[] files = {file};
+        UploadVo uploadVo = uploadService.upload(files);
+        List<SysOssUploadVo> uploadVos = uploadVo.getUploadVos();
+        if (CollectionUtils.isEmpty(uploadVos)) {
+            throw new ServiceException("上传文件信息异常");
+        }
+
+        SysOssUploadVo sysOssUploadVo = uploadVos.getFirst();
+        Long ossId = Long.parseLong(sysOssUploadVo.getOssId());
+
+        // 3. 写入上传记录
+        try {
+            SessionUploadRecord record = new SessionUploadRecord();
+            record.setUserId(userId);
+            record.setSessionId(sessionId);
+            record.setFileName(fileName);
+            record.setFileType(ext);
+            record.setFileSize(fileSize);;
+            record.setOssId(ossId);
+            record.setOssUrl(sysOssUploadVo.getUrl());
+            recordMapper.insert(record);
+        } catch (Exception e) {
+            log.error("上传记录写入失败: fileName={}, ossId={}", fileName, ossId, e);
+        }
+
+        // 4. 异步解析与分块（保障前端上传体验）
+        fileParseAsyncService.asyncParseAndCache(ossId, ext, fileBytes);
+        return ossId;
     }
 }
 

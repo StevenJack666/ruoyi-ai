@@ -31,4 +31,9 @@ public interface ISessionMessageFileService {
      * @param sessionMessageFileRelList
      */
     void batchInsert(List<SessionMessageFileRel> sessionMessageFileRelList);
+
+    /**
+     * 根据会话ID查询关联数据
+     */
+    List<Long> selectOssIdsBySessionId(Long sessionId);
 }
