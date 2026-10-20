@@ -29,3 +29,12 @@ CREATE TABLE `agent_info` (
 INSERT INTO ruoyi_ai_agent.sys_config
 (config_id, tenant_id, config_name, config_key, config_value, config_type, create_dept, create_by, create_time, update_by, update_time, remark)
 VALUES(2112382154769518593, '000000', '上传路径地址', 'sys.upload.path', '', 'N', 103, 1, '2026-10-20 11:15:27', 1, '2026-10-20 11:23:59', NULL);
+
+ALTER TABLE session_upload_record
+    ADD COLUMN oss_url VARCHAR(1000) DEFAULT NULL COMMENT 'OSS文件访问地址'
+AFTER oss_id;
+
+ALTER TABLE session_upload_record
+ADD COLUMN create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+ADD COLUMN update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+ADD COLUMN is_deleted TINYINT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除';
