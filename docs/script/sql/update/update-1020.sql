@@ -41,3 +41,12 @@ ADD COLUMN is_deleted TINYINT DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-
 
 ALTER TABLE session_upload_record
 MODIFY COLUMN session_id BIGINT DEFAULT NULL COMMENT '会话ID';
+
+INSERT INTO `sys_config`
+(config_id, tenant_id, config_name, config_key, config_value, config_type,
+ create_dept, create_by, create_time, update_by, update_time, remark)
+VALUES
+    (2113100000000000001, '000000', '会话文档单文件大小上限(MB)',
+     'chat.upload.max-file-size-mb', '10', 'N',
+     103, 1, now(), 1, now(),
+     '单个上传文档的最大体积，单位MB；超过时接口返回明确提示');
