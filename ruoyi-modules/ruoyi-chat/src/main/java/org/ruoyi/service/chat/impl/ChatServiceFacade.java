@@ -37,6 +37,8 @@ import dev.langchain4j.skills.FileSystemSkill;
 import dev.langchain4j.skills.FileSystemSkillLoader;
 import dev.langchain4j.skills.shell.ShellSkills;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,6 +46,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.ruoyi.agent.*;
 import org.ruoyi.agent.tool.ExecuteSqlQueryTool;
 import org.ruoyi.agent.tool.QueryAllTablesTool;
@@ -150,11 +153,13 @@ public class ChatServiceFacade implements IChatService {
     private final IAgentService agentService;
     private final LangChain4jMcpToolProviderService langChain4jMcpToolProviderService;
 
-    /** 系统参数键：单个上传文件大小上限（单位 MB） */
+    /** 系统参数键：单个上传文件大小上限（单位 MB，支持小数） */
     private static final String CONFIG_MAX_UPLOAD_FILE_SIZE_MB = "chat.upload.max-file-size-mb";
-    /** 默认单文件上限（MB），与 application.yml 的 multipart 限制保持一致 */
+    /** 默认单文件上限（MB） */
     private static final long DEFAULT_MAX_UPLOAD_FILE_SIZE_MB = 10L;
     private static final long BYTES_PER_MB = 1024L * 1024L;
+    /** 单文件上限的硬下限，防止配置过小导致上限为 0 */
+    private static final long MIN_UPLOAD_FILE_SIZE_BYTES = 1024L;
 
     /**
      * 内存实例缓存，避免同一会话重复创建
@@ -1671,35 +1676,43 @@ public class ChatServiceFacade implements IChatService {
 
     /**
      * 单个上传文件大小上限（字节）。
-     * 优先读取系统参数 {@code chat.upload.max-file-size-mb}；
-     * 未配置、非数字或非正数时回退默认值，避免配置错误直接把上传功能打挂。
+     * 配置项单位为 MB，只需填数字，支持小数（如 0.1 表示 100KB）。
      */
     private long resolveMaxUploadFileSizeBytes() {
-        long maxMb = DEFAULT_MAX_UPLOAD_FILE_SIZE_MB;
+        BigDecimal maxMb = BigDecimal.valueOf(DEFAULT_MAX_UPLOAD_FILE_SIZE_MB);
+        String raw = null;
         try {
-            String value = sysConfigService.selectConfigByKey(
-                CONFIG_MAX_UPLOAD_FILE_SIZE_MB
-            );
-            if (StringUtils.isNotBlank(value)) {
-                long parsed = Long.parseLong(value.trim());
-                if (parsed > 0) {
+            raw = sysConfigService.selectConfigByKey(CONFIG_MAX_UPLOAD_FILE_SIZE_MB);
+            if (StringUtils.isNotBlank(raw)) {
+                BigDecimal parsed = new BigDecimal(raw.trim());
+                if (parsed.compareTo(BigDecimal.ZERO) > 0) {
                     maxMb = parsed;
                 } else {
                     log.warn(
-                        "系统参数 {} 配置为非正数，使用默认值 {}MB",
+                        "系统参数 {} 配置为非正数({})，使用默认值 {}MB",
                         CONFIG_MAX_UPLOAD_FILE_SIZE_MB,
+                        raw,
                         DEFAULT_MAX_UPLOAD_FILE_SIZE_MB
                     );
                 }
             }
         } catch (NumberFormatException e) {
             log.warn(
-                "系统参数 {} 配置不是数字，使用默认值 {}MB",
+                "系统参数 {} 配置不是数字({})，使用默认值 {}MB",
                 CONFIG_MAX_UPLOAD_FILE_SIZE_MB,
+                raw,
                 DEFAULT_MAX_UPLOAD_FILE_SIZE_MB
             );
         }
-        return maxMb * BYTES_PER_MB;
+
+        // MB -> 字节，向下取整，作为上限更安全
+        long bytes = maxMb
+            .multiply(BigDecimal.valueOf(BYTES_PER_MB))
+            .setScale(0, RoundingMode.DOWN)
+            .longValue();
+
+        // 防止配置过小导致上限为 0
+        return Math.max(bytes, MIN_UPLOAD_FILE_SIZE_BYTES);
     }
 
     /**
