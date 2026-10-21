@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.apache.poi.xwpf.usermodel.*;
 import org.ruoyi.common.core.utils.SpringUtils;
-import org.ruoyi.service.chat.impl.provider.ProviderImageDescriber;
+import org.ruoyi.service.chat.doc.ImageOcrService;
 import org.ruoyi.service.knowledge.ResourceLoader;
 import org.ruoyi.service.knowledge.TextSplitter;
 import org.springframework.stereotype.Component;
@@ -22,32 +22,64 @@ import java.util.List;
 @Slf4j
 public class WordLoader implements ResourceLoader {
     private final TextSplitter textSplitter;
-    private final ProviderImageDescriber describer = SpringUtils.getBean(ProviderImageDescriber.class);
+    private final ImageOcrService imageOcrService = SpringUtils.getBean(ImageOcrService.class);
+
 
     @Override
     public String getContent(InputStream inputStream) {
         try {
             XWPFDocument document = new XWPFDocument(inputStream);
             StringBuilder sb = new StringBuilder();
+            List<byte[]> images = new ArrayList<>();
 
             // 遍历文档中的所有元素（段落、表格等）
             for (IBodyElement element : document.getBodyElements()) {
                 switch (element.getElementType()) {
-                    case PARAGRAPH -> sb.append(parseParagraph((XWPFParagraph) element));
+                    case PARAGRAPH -> sb.append(parseParagraph((XWPFParagraph) element, images));
                     case TABLE -> sb.append(parseTable((XWPFTable) element));
                     default -> {}
                 }
             }
-            return sb.toString().trim();
+
+            // 并发 OCR，一次性替换占位符
+            String content = sb.toString();
+            if (!images.isEmpty()) {
+                List<String> ocrTexts = imageOcrService.ocrAll(images);
+                for (int i = 0; i < ocrTexts.size(); i++) {
+                    content = content.replace(
+                        "{{IMG:" + i + "}}",
+                        toImageDescription(ocrTexts.get(i))
+                    );
+                }
+            }
+            return content.trim();
         } catch (IOException e) {
             throw new RuntimeException("Word文档解析失败", e);
         }
     }
 
     /**
+     * 把 OCR 结果渲染成与原逻辑一致的格式：![图片描述: xxx]
+     * <p>
+     * 注意：alt 文本里的换行会把 Markdown 拆断，"]" 会提前闭合标签，
+     * 所以这里统一压成单行并转义。
+     */
+    private String toImageDescription(String text) {
+        if (text == null || text.isBlank()) {
+            return "![图片描述: 无法识别]";
+        }
+        String singleLine = text
+            .replaceAll("\\s+", " ")   // 换行/制表/连续空白 → 单空格
+            .replace("]", "\\]")       // 防止提前闭合
+            .trim();
+        return "![图片描述: " + singleLine + "]";
+    }
+
+
+    /**
      * 段落解析，识别标题层级和内嵌图片
      */
-    private String parseParagraph(XWPFParagraph paragraph) {
+    private String parseParagraph(XWPFParagraph paragraph, List<byte[]> images) {
         List<XWPFRun> runs = paragraph.getRuns();
         if (runs == null || runs.isEmpty()) {
             String text = paragraph.getText().trim();
@@ -61,31 +93,11 @@ public class WordLoader implements ResourceLoader {
             List<XWPFPicture> pictures = run.getEmbeddedPictures();
             if (pictures != null && !pictures.isEmpty()) {
                 hasImage = true;
-                for (XWPFPicture pic : pictures) {
-                    XWPFPictureData picData = pic.getPictureData();
-                    // 防御性检查，防止空指针
-                    if (picData == null) continue;
-
-                    String fileName = picData.getFileName();
-                    String suffix = (fileName != null && fileName.contains("."))
-                        ? fileName.substring(fileName.lastIndexOf('.')) : ".png";
-
-                    sb.append("![").append(fileName != null ? fileName : "图片").append("]");
-
-                    try {
-                        byte[] data = picData.getData();
-                        String description = describer != null
-                            ? describer.describe(data, fileName)
-                            : (fileName != null ? fileName : "图片");
-                        sb.append("![图片描述: ").append(description).append("]");
-                    } catch (Exception e) {
-                        log.warn("图片描述失败: {}, 跳过", fileName, e);
-                        sb.append("![").append(fileName != null ? fileName : "图片").append("]");
-                    }
-                    sb.append("\n\n");
-
-                    log.debug("识别到图片: {} ({} bytes)", fileName,
-                        picData.getData() != null ? picData.getData().length : 0);
+                for (XWPFPicture picture : pictures) {
+                    XWPFPictureData data = picture.getPictureData();
+                    if (data == null || data.getData() == null) continue;
+                    images.add(data.getData());
+                    sb.append("\n{{IMG:").append(images.size() - 1).append("}}\n");
                 }
             } else {
                 String runText = run.getText(0);

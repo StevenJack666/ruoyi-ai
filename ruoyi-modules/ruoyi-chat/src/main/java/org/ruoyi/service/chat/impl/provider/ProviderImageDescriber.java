@@ -45,18 +45,27 @@ public class ProviderImageDescriber  {
         }
 
         try {
-            return describeByModel(imageData, fileName);
+            return describeByModel(imageData, fileName, true);
         } catch (Exception e) {
             log.error("图片描述失败: fileName={}, error={}", fileName, e.getMessage());
             return fileName != null ? fileName : "未知图片";
         }
     }
 
+
+    /**
+     * 完整 OCR（不限制字数），用于文档解析
+     */
+    public String describeFull(byte[] imageData, String fileName) throws Exception {
+        return describeByModel(imageData, fileName, false);
+    }
+
+
     private int maxDescLength() {
         return 200;
     }
 
-    private String describeByModel(byte[] imageData, String fileName) throws Exception {
+    private String describeByModel(byte[] imageData, String fileName, boolean limitLength) throws Exception {
         // 1. 获取图片 base64
         String suffix = fileName != null && fileName.contains(".")
             ? fileName.substring(fileName.lastIndexOf('.') + 1) : "png";
@@ -80,13 +89,23 @@ public class ProviderImageDescriber  {
         ChatModel model = chatService.buildChatModel(modelConfig);
         String base64 = Base64.getEncoder().encodeToString(imageData);
 
-        String userPrompt = "你是一个专业的 OCR 文字识别引擎。请严格提取图片中的所有可见文字。\n" +
+        String userPrompt = limitLength ?
+            "你是一个专业的 OCR 文字识别引擎。请严格提取图片中的所有可见文字。\n" +
             "要求：\n" +
             "1. 仅输出识别到的纯文本内容，严格保持原始的换行、段落和空格结构。\n" +
             "2. 严禁输出任何解释性、描述性或总结性的语言（如“图片中显示”、“这是一个界面”、“识别结果如下”等）。\n" +
             "3. 不要猜测、补全或编造任何图中不存在的文字。\n" +
             "4. 如果图片中没有文字，请直接返回空字符串。 \n" +
-            "5.字数限制在" + maxDescLength() + "字以内。";
+            "5.字数限制在" + maxDescLength() + "字以内。"
+            :
+            """
+              你是一个专业的 OCR 与版面还原引擎。请完整提取图片中的所有可见文字。
+              要求：
+              1. 严格保持原始阅读顺序与换行结构，表格用 Markdown 表格；
+              2. 只输出图片中真实存在的文字，禁止推测、补全；
+              3. 无法辨认的内容标注 [无法识别]；
+              4. 不要输出任何解释性文字。
+              """;;
 
         // 3. 构建内容对象（明确传入 base64 字符串和 MIME 类型）
         ImageContent imageContent = ImageContent.from(base64, "image/" + suffix);

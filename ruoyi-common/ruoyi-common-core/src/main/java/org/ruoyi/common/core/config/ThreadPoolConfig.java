@@ -77,6 +77,39 @@ public class ThreadPoolConfig {
         return executor;
     }
 
+    /** 聊天/大模型调用专用池 */
+    @Bean(name = "chatTaskExecutor")
+    public ThreadPoolTaskExecutor chatTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(16);
+        executor.setMaxPoolSize(64);
+        executor.setQueueCapacity(100);
+        executor.setKeepAliveSeconds(120);
+        executor.setThreadNamePrefix("chat-task-");
+        // 不要用 CallerRunsPolicy：会让 HTTP/XNIO 线程执行几分钟的大模型调用
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+        executor.initialize();
+        return executor;
+    }
+
+    /** 文档解析专用池：与聊天池隔离，避免长任务互相饿死 */
+    @Bean(name = "fileParseExecutor")
+    public ThreadPoolTaskExecutor fileParseExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(200);
+        executor.setKeepAliveSeconds(300);
+        executor.setThreadNamePrefix("file-parse-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(120);
+        executor.initialize();
+        return executor;
+    }
+
     /**
      * 销毁事件
      * 停止线程池

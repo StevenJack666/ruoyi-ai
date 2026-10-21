@@ -26,13 +26,16 @@ public class FileParseAsyncService {
     /**
      * 异步执行文档解析与缓存
      */
-    @Async
+    @Async("knowledgeParseExecutor")
     public void asyncParseAndCache(Long ossId, String ext, byte[] fileBytes) {
         try {
             ResourceLoader loader = resourceLoaderFactory.getLoaderByFileType(ext);
             String text;
             try (InputStream is = new ByteArrayInputStream(fileBytes)) {
                 text = loader.getContent(is);
+            }
+            if (text == null) {
+                text = "";
             }
 
             List<String> chunks = loader.getChunkList(text, null);
