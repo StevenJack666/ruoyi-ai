@@ -36,13 +36,14 @@ public class WordLoader implements ResourceLoader {
             for (IBodyElement element : document.getBodyElements()) {
                 switch (element.getElementType()) {
                     case PARAGRAPH -> sb.append(parseParagraph((XWPFParagraph) element, images));
-                    case TABLE -> sb.append(parseTable((XWPFTable) element));
+                    case TABLE -> sb.append(parseTable((XWPFTable) element, images));
                     default -> {}
                 }
             }
 
             // 并发 OCR，一次性替换占位符
             String content = sb.toString();
+            log.info("Word文档解析完成，开始进行图片OCR识别: 图片数量={}, 文本长度={}", images.size(), content.length());
             if (!images.isEmpty()) {
                 List<String> ocrTexts = imageOcrService.ocrAll(images);
                 for (int i = 0; i < ocrTexts.size(); i++) {
@@ -133,7 +134,7 @@ public class WordLoader implements ResourceLoader {
     /**
      * 表格解析为 Markdown 格式
      */
-    private String parseTable(XWPFTable table) {
+    private String parseTable(XWPFTable table, List<byte[]> images) {
         List<XWPFTableRow> rows = table.getRows();
         if (rows.isEmpty()) {
             return "";
@@ -143,7 +144,7 @@ public class WordLoader implements ResourceLoader {
         XWPFTableRow headerRow = rows.get(0);
         List<String> headers = new ArrayList<>();
         for (XWPFTableCell cell : headerRow.getTableCells()) {
-            headers.add(cell.getText().trim().replace("|", "\\|"));
+            headers.add(extractCellText(cell, images));
         }
 
         // 表头行
@@ -157,7 +158,7 @@ public class WordLoader implements ResourceLoader {
             XWPFTableRow row = rows.get(i);
             List<String> cells = new ArrayList<>();
             for (int j = 0; j < headers.size() && j < row.getTableCells().size(); j++) {
-                cells.add(row.getCell(j).getText().trim().replace("|", "\\|"));
+                cells.add(extractCellText(row.getCell(j), images));
             }
             sb.append("| ").append(String.join(" | ", cells)).append(" |\n");
         }
@@ -176,8 +177,37 @@ public class WordLoader implements ResourceLoader {
             return 2;
         }
     }
-
-
+    /**
+     * 提取表格单元格内容，同时识别单元格内嵌图片（占位符格式与段落一致，便于统一 OCR 替换）
+     */
+    private String extractCellText(XWPFTableCell cell, List<byte[]> images) {
+        StringBuilder sb = new StringBuilder();
+        for (XWPFParagraph paragraph : cell.getParagraphs()) {
+            List<XWPFRun> runs = paragraph.getRuns();
+            if (runs == null || runs.isEmpty()) {
+                continue;
+            }
+            for (XWPFRun run : runs) {
+                List<XWPFPicture> pictures = run.getEmbeddedPictures();
+                if (pictures != null && !pictures.isEmpty()) {
+                    for (XWPFPicture picture : pictures) {
+                        XWPFPictureData data = picture.getPictureData();
+                        if (data == null || data.getData() == null) {
+                            continue;
+                        }
+                        images.add(data.getData());
+                        sb.append("{{IMG:").append(images.size() - 1).append("}}");
+                    }
+                } else {
+                    String runText = run.getText(0);
+                    if (runText != null) {
+                        sb.append(runText);
+                    }
+                }
+            }
+        }
+        return sb.toString().trim().replace("|", "\\|");
+    }
 
     @Override
     public List<String> getChunkList(String content, String kid) {
