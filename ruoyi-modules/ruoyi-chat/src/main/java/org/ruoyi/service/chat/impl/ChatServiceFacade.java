@@ -2,6 +2,7 @@ package org.ruoyi.service.chat.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.collection.CollUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.agentic.AgenticServices;
 import dev.langchain4j.agentic.supervisor.SupervisorAgent;
@@ -1706,13 +1707,17 @@ public class ChatServiceFacade implements IChatService {
     /**
      * 将检索到的分块拼接为文档原文（中性描述，避免"我已掌握"这类助手口吻）
      */
-    private String buildSessionContext(List<String> chunks) {
+    private String buildSessionContext(List<String> chunks, String docTitle) {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < chunks.size(); i++) {
-            sb.append("---\n").append(chunks.get(i)).append("\n");
+        if (StringUtils.isNotBlank(docTitle)) {
+            sb.append("## ").append(docTitle).append("\n\n");
         }
-        return sb.toString();
+        for (String chunk : chunks) {
+            sb.append("---\n").append(chunk).append("\n");
+        }
+        return sb.append("\n").toString();
     }
+
     /**
      * 上传模式
      */
@@ -1808,14 +1813,19 @@ public class ChatServiceFacade implements IChatService {
             boolean isUpload = Boolean.TRUE.equals(
                 chatRequest.getIsUploadFile()
             );
+            int docNo = 0;
             for (Long ossId : ossIds) {
                 if (ossId == null) continue;
                 String cacheKey = UPLOAD_REDIS_PREFIX_KEY + ossId;
                 List<String> chunks = RedisUtils.getCacheList(cacheKey);
                 if (CollUtil.isNotEmpty(chunks)) {
+                    docNo++;
+                    String fileName = resolveFileName(ossId);
+                    String docTitle = "文档 " + docNo
+                        + (StringUtils.isNotBlank(fileName) ? "：" + fileName : "");
                     if (isUpload) {
                         // 上传消息：全量注入，确保模型能完整分析新文档
-                        docContextBuilder.append(buildSessionContext(chunks));
+                        docContextBuilder.append(buildSessionContext(chunks, docTitle));
                         log.info(
                             "会话文档全量注入: ossId={}, 分块数={}",
                             ossId,
@@ -1829,7 +1839,7 @@ public class ChatServiceFacade implements IChatService {
                         );
                         if (!CollUtil.isEmpty(matchedChunks)) {
                             docContextBuilder.append(
-                                buildSessionContext(matchedChunks)
+                                buildSessionContext(matchedChunks, docTitle)
                             );
                         }
                     }
@@ -1840,6 +1850,25 @@ public class ChatServiceFacade implements IChatService {
             ? null
             : docContextBuilder.toString();
     }
+
+    /**
+     * 获取文件名
+     * @param ossId
+     * @return
+     */
+    private String resolveFileName(Long ossId) {
+        try {
+            List<SessionUploadRecord> records = recordMapper.selectList(
+                new LambdaQueryWrapper<SessionUploadRecord>()
+                    .eq(SessionUploadRecord::getOssId, ossId)
+            );
+            return records.isEmpty() ? null : records.getFirst().getFileName();
+        } catch (Exception e) {
+            log.warn("查询上传文件名失败: ossId={}", ossId, e);
+            return null;
+        }
+    }
+
 
     /**
      * 根据 AgentVo 动态构建子 Agent 列表
