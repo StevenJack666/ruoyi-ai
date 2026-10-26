@@ -2035,6 +2035,6 @@ public class ChatServiceFacade implements IChatService {
      * 只要没有工具、知识库、技能，纯聊天和文档问答都可以。
      */
     private boolean canUseDirectAnswer(AgentVo agentVo) {
-        return "0".toString().equals(agentVo.getEnableThinking());
+        return "0".equals(agentVo.getEnableThinking());
     }
 }
