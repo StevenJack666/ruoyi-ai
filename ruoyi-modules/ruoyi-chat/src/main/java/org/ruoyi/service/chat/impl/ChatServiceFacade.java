@@ -208,6 +208,11 @@ public class ChatServiceFacade implements IChatService {
         """;
 
     /**
+     * 挡板配置key
+     */
+    private static final String SYS_CONFIG_MOCK_KEY = "mock";
+
+    /**
      * 内存实例缓存，避免同一会话重复创建
      * Key: sessionId, Value: MessageWindowChatMemory实例
      */
@@ -260,6 +265,11 @@ public class ChatServiceFacade implements IChatService {
      * @return SseEmitter
      */
     public SseEmitter sseChat(ChatRequest chatRequest) {
+        // 判断挡板是否开启
+        if (getMock()) {
+            return mockSseChat();
+        }
+
         // 4. 具体的服务实现
         Long userId = LoginHelper.getUserId();
         String tokenValue = StpUtil.getTokenValue();
@@ -2036,5 +2046,40 @@ public class ChatServiceFacade implements IChatService {
      */
     private boolean canUseDirectAnswer(AgentVo agentVo) {
         return "0".equals(agentVo.getEnableThinking());
+    }
+
+    /**
+     * 获取挡板标识
+     */
+    private boolean getMock(){
+        String config = sysConfigService.selectConfigByKey(SYS_CONFIG_MOCK_KEY);
+        return StringUtils.isEmpty(config) ? Boolean.FALSE : Boolean.valueOf(config);
+    }
+
+    /**
+     * 挡板响应：建立 SSE 连接，异步推送一条模拟消息并关闭连接
+     *
+     * @return SseEmitter
+     */
+    private SseEmitter mockSseChat() {
+        Long userId = LoginHelper.getUserId();
+        String tokenValue = StpUtil.getTokenValue();
+        // 注册连接，前端 /chat/send 的响应流即为此 emitter
+        SseEmitter emitter = sseEmitterManager.connect(userId, tokenValue);
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                // 与正常回答保持一致的事件协议：content -> done
+                SseMessageUtils.sendContent(userId, "操作成功");
+                SseMessageUtils.sendDone(userId);
+            } catch (Exception e) {
+                log.error("挡板响应发送失败", e);
+                SseMessageUtils.sendError(userId, e.getMessage());
+            } finally {
+                // 关闭连接，否则连接会挂到 24 小时超时
+                SseMessageUtils.completeConnection(userId, tokenValue);
+            }
+        }, chatTaskExecutor);
+        return emitter;
     }
 }
