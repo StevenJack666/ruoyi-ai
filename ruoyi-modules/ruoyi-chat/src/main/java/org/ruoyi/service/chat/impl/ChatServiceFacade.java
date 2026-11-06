@@ -463,7 +463,7 @@ public class ChatServiceFacade implements IChatService {
                 SseMessageUtils.completeConnection(userId, tokenValue);
                 return chatRequest.getEmitter();
             }
-            return answerQuickly(chatRequest, chatModelVo, chatService, hasDoc);
+            return answerQuickly(chatRequest, chatModelVo, chatService, hasDoc, agentVo);
         }
 
         // 工具装配：智能体有关联工具ID时按ID装配，否则回退到原有硬编码 MCP 客户端
@@ -610,7 +610,8 @@ public class ChatServiceFacade implements IChatService {
         ChatRequest chatRequest,
         ChatModelVo chatModelVo,
         AbstractChatService chatService,
-        boolean hasDoc
+        boolean hasDoc,
+        AgentVo agentVo
     ) {
         List<ChatMessage> source = chatRequest.getContextMessages();
         List<ChatMessage> messages = source == null
@@ -618,12 +619,9 @@ public class ChatServiceFacade implements IChatService {
             : new ArrayList<>(source);
 
         // 系统提示词：路由规则在前，智能体自定义提示词在后
-        String agentSystemPrompt = messages.stream()
-            .filter(SystemMessage.class::isInstance)
-            .map(m -> ((SystemMessage) m).text())
-            .filter(StringUtils::isNotBlank)
-            .findFirst()
-            .orElse(null);
+        String agentSystemPrompt = agentVo == null
+            ? null
+            : agentVo.getSystemPrompt();
 
         messages.removeIf(SystemMessage.class::isInstance);
         messages.addFirst(SystemMessage.from(
@@ -631,6 +629,11 @@ public class ChatServiceFacade implements IChatService {
                 ? buildDocQaSystemPrompt(agentSystemPrompt)
                 : buildPlainChatSystemPrompt(agentSystemPrompt)
         ));
+
+        log.info("系统提示词装配: hasDoc={}, agentPrompt={}, agentPromptLen={}",
+            hasDoc,
+            StringUtils.isNotBlank(agentSystemPrompt) ? "已启用" : "未配置",
+            agentSystemPrompt == null ? 0 : agentSystemPrompt.length());
 
         // 获取配置
         Long userId = chatRequest.getUserId();
@@ -667,6 +670,23 @@ public class ChatServiceFacade implements IChatService {
             tenantId
         );
     }
+
+    private String composeSystemPrompt(String basePrompt, String agentSystemPrompt) {
+        // 用户没配置提示词：保持原有提示词，一个字都不加
+        if (StringUtils.isBlank(agentSystemPrompt)) {
+            return basePrompt;
+        }
+        return "【指令优先级声明】\n" +
+            "下面分两部分：第 1 部分是用户在后台为智能体指定的设定，优先级最高；\n" +
+            "第 2 部分是系统通用规则，仅用于补充第 1 部分未覆盖的内容。\n" +
+            "当两者冲突时，一律以第 1 部分【智能体设定】为准；\n" +
+            "第 2 部分不得用于否定、削弱、改写或替换第 1 部分。\n\n" +
+            "========== 1. 智能体设定（最高优先级，必须遵守） ==========\n" +
+            agentSystemPrompt.trim() + "\n\n" +
+            "========== 2. 通用规则（补充，冲突时让位于第 1 部分） ==========\n" +
+            basePrompt.trim();
+    }
+
 
     /**
      * 单模型快速通道的系统提示词：把 Supervisor 的路由规则收敛成
@@ -712,7 +732,7 @@ public class ChatServiceFacade implements IChatService {
         if (StringUtils.isBlank(agentSystemPrompt)) {
             return basePrompt;
         }
-        return basePrompt + "\n\n【智能体附加要求】\n" + agentSystemPrompt;
+        return composeSystemPrompt(basePrompt, agentSystemPrompt);
     }
 
     /**
@@ -735,7 +755,7 @@ public class ChatServiceFacade implements IChatService {
         if (StringUtils.isBlank(agentSystemPrompt)) {
             return basePrompt;
         }
-        return basePrompt + "\n\n【智能体附加要求】\n" + agentSystemPrompt;
+        return composeSystemPrompt(basePrompt, agentSystemPrompt);
     }
 
     /**
@@ -1909,7 +1929,7 @@ public class ChatServiceFacade implements IChatService {
 
             // 提示词存在注入
             String systemPrompt = agentVo.getSystemPrompt();
-            if (StringUtils.isNotEmpty(systemPrompt)) {
+            if (StringUtils.isNotBlank(systemPrompt)) {
                 customAgentBuilder.systemMessage(systemPrompt);
             }
 

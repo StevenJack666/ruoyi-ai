@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -77,6 +78,10 @@ public class CharacterTextSplitter implements TextSplitter {
                 }
             }
         }
-        return chunkList;
+
+        return chunkList.stream()
+            .map(String::trim)
+            .filter(StringUtils::isNotBlank)
+            .collect(Collectors.toList());
     }
 }

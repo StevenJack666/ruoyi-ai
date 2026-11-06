@@ -73,8 +73,12 @@ public class MemoryVectorStoreStrategy extends AbstractVectorStoreStrategy {
         List<String> chunkList = storeEmbeddingBo.getChunkList();
         String docId = storeEmbeddingBo.getDocId();
         String kid = storeEmbeddingBo.getKid();
-        String modelName = storeEmbeddingBo.getEmbeddingModelName();
+        if (chunkList == null || chunkList.isEmpty()) {
+            log.warn("切片为空，跳过向量化: kid={}, docId={}", kid, docId);
+            return;
+        }
 
+        String modelName = storeEmbeddingBo.getEmbeddingModelName();
         EmbeddingModel embeddingModel = getEmbeddingModel(modelName);
         log.info("内存向量库存储: kid={}, docId={}, chunks={}", kid, docId, chunkList.size());
 
@@ -82,6 +86,10 @@ public class MemoryVectorStoreStrategy extends AbstractVectorStoreStrategy {
 
         IntStream.range(0, chunkList.size()).parallel().forEach(i -> {
             String text = chunkList.get(i);
+            if (text == null || text.isBlank()) {
+                log.warn("跳过空白切片: kid={}, docId={}, idx={}", kid, docId, i);
+                return;
+            }
 
             Embedding embedding = embeddingModel.embed(text).content();
             float[] vector = embedding.vector();

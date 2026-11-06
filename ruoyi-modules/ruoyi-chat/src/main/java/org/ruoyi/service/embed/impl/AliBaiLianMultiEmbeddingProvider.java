@@ -203,6 +203,8 @@ public class AliBaiLianMultiEmbeddingProvider implements MultiModalEmbedModelSer
         // 👇 1. 在发送请求前，先获取一个令牌
         // 如果当前请求速率超过了限制，acquire() 方法会自动阻塞当前线程，直到有可用的令牌
         RATE_LIMITER.acquire();
+        long t = System.currentTimeMillis();
+        log.info("调用百炼向量接口: model={}, url={}", chatModelVo.getModelName(), chatModelVo.getApiHost());
 
         // 👇 2. 原有的请求逻辑保持不变
         String jsonBody = request.toJson();
@@ -215,6 +217,9 @@ public class AliBaiLianMultiEmbeddingProvider implements MultiModalEmbedModelSer
             .build();
 
         try (okhttp3.Response response = okHttpClient.newCall(httpRequest).execute()) {
+            log.info("百炼向量接口返回: model={}, httpCode={}, 耗时={}ms",
+                chatModelVo.getModelName(), response.code(), System.currentTimeMillis() - t);
+
             if (!response.isSuccessful()) {
                 String err = response.body() != null ? response.body().string() : "无错误信息";
                 throw new IllegalArgumentException("API调用失败: " + response.code() + " - " + err, null);

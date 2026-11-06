@@ -246,6 +246,9 @@ public class KnowledgeAttachServiceImpl implements IKnowledgeAttachService {
                 content = resourceLoader.getContent(inputStream);
             }
             List<String> chunkList = resourceLoader.getChunkList(content, String.valueOf(knowledgeId));
+            if (CollUtil.isEmpty(chunkList)) {
+                throw new RuntimeException("文档内容为空或未切分出有效片段，请检查文件内容与知识库分隔符配置");
+            }
 
             List<String> fids = new ArrayList<>();
             List<KnowledgeFragment> knowledgeFragmentList = new ArrayList<>();
