@@ -2084,22 +2084,46 @@ public class ChatServiceFacade implements IChatService {
     private SseEmitter mockSseChat() {
         Long userId = LoginHelper.getUserId();
         String tokenValue = StpUtil.getTokenValue();
-        // 注册连接，前端 /chat/send 的响应流即为此 emitter
-        SseEmitter emitter = sseEmitterManager.connect(userId, tokenValue);
 
-        CompletableFuture.runAsync(() -> {
-            try {
-                // 与正常回答保持一致的事件协议：content -> done
-                SseMessageUtils.sendContent(userId, "操作成功");
-                SseMessageUtils.sendDone(userId);
-            } catch (Exception e) {
-                log.error("挡板响应发送失败", e);
-                SseMessageUtils.sendError(userId, e.getMessage());
-            } finally {
-                // 关闭连接，否则连接会挂到 24 小时超时
-                SseMessageUtils.completeConnection(userId, tokenValue);
-            }
-        }, chatTaskExecutor);
+        // 每个请求一个独立 emitter，不进入 USER_TOKEN_EMITTERS
+        SseEmitter emitter = new SseEmitter(86400000L);
+
+        emitter.onCompletion(() ->
+            log.debug("挡板 SSE 完成: userId={}, token={}", userId, tokenValue));
+        emitter.onTimeout(() ->
+            log.debug("挡板 SSE 超时: userId={}, token={}", userId, tokenValue));
+        emitter.onError(e ->
+            log.debug("挡板 SSE 异常: userId={}, token={}, error={}",
+                userId, tokenValue, e.getMessage()));
+
+        try {
+            // 与正常 SSE 保持一致，先通知客户端连接已建立
+            emitter.send(SseEmitter.event().comment("connected"));
+        } catch (IOException e) {
+            log.error("挡板 SSE 建立失败", e);
+            emitter.completeWithError(e);
+            return emitter;
+        }
+
+        try {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    // 与正常回答保持一致的事件协议：content -> done
+                    SseMessageUtils.sendContent(emitter, "操作成功");
+                    SseMessageUtils.sendDone(emitter);
+                } catch (Exception e) {
+                    log.error("挡板响应发送失败", e);
+                } finally {
+                    // 只关闭本次请求自己的 emitter
+                    SseMessageUtils.complete(emitter);
+                }
+            }, chatTaskExecutor);
+        } catch (RejectedExecutionException e) {
+            // AbortPolicy：队列满会在请求线程同步抛出
+            log.error("聊天线程池已满，挡板请求被拒绝", e);
+            SseMessageUtils.sendError(emitter, "当前对话请求过多，请稍后重试");
+            SseMessageUtils.complete(emitter);
+        }
         return emitter;
     }
 }

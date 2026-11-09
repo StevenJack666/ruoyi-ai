@@ -8,6 +8,7 @@ import org.ruoyi.common.core.utils.SpringUtils;
 import org.ruoyi.common.sse.core.SseEmitterManager;
 import org.ruoyi.common.sse.dto.SseEventDto;
 import org.ruoyi.common.sse.dto.SseMessageDto;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * SSE工具类
@@ -152,4 +153,29 @@ public class SseMessageUtils {
         return SSE_ENABLE;
     }
 
+    public static void sendEvent(SseEmitter emitter, SseEventDto eventDto) {
+        if (!isEnable()) {
+            return;
+        }
+        MANAGER.sendEvent(emitter, eventDto);
+    }
+
+    public static void sendContent(SseEmitter emitter, String content) {
+        sendEvent(emitter, SseEventDto.content(content));
+    }
+
+    public static void sendDone(SseEmitter emitter) {
+        sendEvent(emitter, SseEventDto.done());
+    }
+
+    public static void sendError(SseEmitter emitter, String error) {
+        sendEvent(emitter, SseEventDto.error(error));
+    }
+
+    public static void complete(SseEmitter emitter) {
+        if (!isEnable()) {
+            return;
+        }
+        MANAGER.complete(emitter);
+    }
 }

@@ -277,4 +277,29 @@ public class SseEmitterManager {
             log.info("SSE发送主题订阅消息topic:{} message:{}", SSE_TOPIC, message);
         });
     }
+
+
+    /**
+     * 向指定的 SseEmitter 发送结构化事件（不经过 USER_TOKEN_EMITTERS）。
+     */
+    public void sendEvent(SseEmitter emitter, SseEventDto eventDto) {
+        if (emitter == null) {
+            return;
+        }
+        try {
+            emitter.send(SseEmitter.event()
+                .name(eventDto.getEvent())
+                .data(JSONUtil.toJsonStr(eventDto)));
+        } catch (Exception e) {
+            log.debug("【SSE发送失败】请求级连接, error: {}", e.getMessage());
+            safeComplete(emitter);
+        }
+    }
+
+    /**
+     * 完成指定的 SseEmitter（不经过 USER_TOKEN_EMITTERS）。
+     */
+    public void complete(SseEmitter emitter) {
+        safeComplete(emitter);
+    }
 }
