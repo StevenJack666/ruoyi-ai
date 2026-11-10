@@ -27,7 +27,7 @@ import org.ruoyi.common.json.utils.JsonUtils;
 import org.ruoyi.workflow.common.ConditionalOnEnable;
 import org.ruoyi.workflow.domain.FlwScriptOutbox;
 import org.ruoyi.workflow.domain.bo.ScriptCallbackBo;
-import org.ruoyi.workflow.service.ScriptCallbackService;
+import org.ruoyi.workflow.service.impl.ScriptCallbackService;
 import org.springframework.stereotype.Component;
 
 /**

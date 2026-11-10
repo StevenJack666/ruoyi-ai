@@ -11,7 +11,7 @@ import org.dromara.warm.flow.core.listener.ListenerVariable;
 import org.ruoyi.workflow.common.ConditionalOnEnable;
 import org.ruoyi.workflow.domain.PlaybookScript;
 import org.ruoyi.workflow.service.IFlwPlaybookScriptService;
-import org.ruoyi.workflow.service.ScriptDispatchService;
+import org.ruoyi.workflow.service.impl.ScriptDispatchService;
 import org.springframework.stereotype.Component;
 
 /**

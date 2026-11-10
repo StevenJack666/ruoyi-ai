@@ -1,17 +1,16 @@
 package org.ruoyi.workflow.job;
 
 import com.baomidou.lock.annotation.Lock4j;
+import java.util.Date;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.workflow.common.ConditionalOnEnable;
 import org.ruoyi.workflow.domain.FlwScriptOutbox;
 import org.ruoyi.workflow.mapper.FlwScriptOutboxMapper;
-import org.ruoyi.workflow.service.ScriptCallbackService;
+import org.ruoyi.workflow.service.impl.ScriptCallbackService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.util.Date;
-import java.util.List;
 
 /**
  * 剧本执行超时扫描任务
@@ -34,7 +33,10 @@ public class ScriptTimeoutJob {
     @Scheduled(fixedDelay = 30_000)
     @Lock4j(keys = "'soar:script:timeout'", acquireTimeout = 0, expire = 60_000)
     public void scan() {
-        List<FlwScriptOutbox> rows = flwScriptOutboxMapper.selectOverdue(new Date(), BATCH_SIZE);
+        List<FlwScriptOutbox> rows = flwScriptOutboxMapper.selectOverdue(
+            new Date(),
+            BATCH_SIZE
+        );
         if (rows.isEmpty()) {
             return;
         }
@@ -46,5 +48,4 @@ public class ScriptTimeoutJob {
             }
         }
     }
-
 }

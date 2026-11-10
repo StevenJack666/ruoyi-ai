@@ -13,7 +13,7 @@ import org.ruoyi.workflow.common.ConditionalOnEnable;
 import org.ruoyi.workflow.common.enums.ScriptOutboxStatus;
 import org.ruoyi.workflow.domain.FlwScriptOutbox;
 import org.ruoyi.workflow.mapper.FlwScriptOutboxMapper;
-import org.ruoyi.workflow.service.ScriptCallbackService;
+import org.ruoyi.workflow.service.impl.ScriptCallbackService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
