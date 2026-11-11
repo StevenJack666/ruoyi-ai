@@ -162,10 +162,13 @@ public class ChatServiceFacade implements IChatService {
     private static final String CONFIG_MAX_UPLOAD_FILE_SIZE_MB = "chat.upload.max-file-size-mb";
     /** 默认单文件上限（MB） */
     private static final long DEFAULT_MAX_UPLOAD_FILE_SIZE_MB = 10L;
+    /** 系统参数键：默认文件上限个数 */
+    private static final String CONFIG_MAX_UPLOAD_FILE_COUNT_SIZE = "chat.upload.max-file-count-size";
+    /** 默认文件上限个数 */
+    private static final int DEFAULT_MAX_UPLOAD_FILE_COUNT_SIZE = Integer.MAX_VALUE;
     private static final long BYTES_PER_MB = 1024L * 1024L;
     /** 单文件上限的硬下限，防止配置过小导致上限为 0 */
     private static final long MIN_UPLOAD_FILE_SIZE_BYTES = 1024L;
-
     @Resource(name = "chatTaskExecutor")
     private Executor chatTaskExecutor;
 
@@ -227,6 +230,11 @@ public class ChatServiceFacade implements IChatService {
     ) {
         if (fileList == null || fileList.length == 0) {
             throw new ServiceException("上传的文件列表为空");
+        }
+        // 校验上传文件个数是否超过配置
+        int maxCountSize = getMaxUploadFileCountSize();
+        if (fileList.length > maxCountSize){
+            throw new ServiceException(String.format("上传的文件个数超过上限，maxCountSize=%s", maxCountSize));
         }
 
         // 上传前统一校验，避免部分文件已落库/已上传后才失败
@@ -2044,6 +2052,28 @@ public class ChatServiceFacade implements IChatService {
 
         // 防止配置过小导致上限为 0
         return Math.max(bytes, MIN_UPLOAD_FILE_SIZE_BYTES);
+    }
+
+    /**
+     * 获取上传文件个数限制
+     */
+    private int getMaxUploadFileCountSize(){
+        int maxCountSize = DEFAULT_MAX_UPLOAD_FILE_COUNT_SIZE;
+        String raw = null;
+        try {
+            raw = sysConfigService.selectConfigByKey(CONFIG_MAX_UPLOAD_FILE_COUNT_SIZE);
+            if (StringUtils.isNotBlank(raw)) {
+                maxCountSize = Integer.parseInt(raw);
+            }
+        } catch (NumberFormatException e) {
+            log.warn(
+                "系统参数 {} 配置不是数字({})，使用默认值 {}",
+                DEFAULT_MAX_UPLOAD_FILE_COUNT_SIZE,
+                raw,
+                DEFAULT_MAX_UPLOAD_FILE_COUNT_SIZE
+            );
+        }
+        return maxCountSize;
     }
 
     /**
