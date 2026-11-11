@@ -31,13 +31,19 @@ public class MyMcpClientListener implements McpClientListener {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final Long userId;
+    private final Long sessionId;
 
     public MyMcpClientListener(Long userId) {
+        this(userId, null);
+    }
+
+    public MyMcpClientListener(Long userId, Long sessionId) {
         this.userId = userId;
+        this.sessionId = sessionId;
     }
 
     public MyMcpClientListener() {
-        this.userId = null;
+        this(null, null);
     }
 
     // ==================== 工具执行 ====================
@@ -138,7 +144,7 @@ public class MyMcpClientListener implements McpClientListener {
             content.put("result", result);
 
             String json = OBJECT_MAPPER.writeValueAsString(content);
-            SseMessageUtils.sendEvent(userId, SseEventDto.builder()
+            SseMessageUtils.sendEvent(userId, sessionId, SseEventDto.builder()
                 .event("mcp")
                 .content(json)
                 .build());

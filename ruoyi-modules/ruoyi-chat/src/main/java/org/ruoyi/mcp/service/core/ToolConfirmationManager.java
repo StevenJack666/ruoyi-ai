@@ -38,10 +38,10 @@ public class ToolConfirmationManager {
     /**
      * 创建确认请求，推送 SSE 事件到前端
      */
-    public String createConfirmation(Long userId, String toolName, Map<String, Object> args) {
+    public String createConfirmation(Long userId, Long sessionId, String toolName, Map<String, Object> args) {
         String confirmId = UUID.randomUUID().toString().replace("-", "");
-        pushConfirmationEvent(userId, confirmId, toolName, args);
-        log.info("创建工具确认请求并推入Redis监听: confirmId={}, userId={}", confirmId, userId);
+        pushConfirmationEvent(userId, sessionId, confirmId, toolName, args);
+        log.info("创建工具确认请求并推入Redis监听: confirmId={}, userId={}, sessionId={}", confirmId, userId, sessionId);
         return confirmId;
     }
 
@@ -92,7 +92,7 @@ public class ToolConfirmationManager {
         }
     }
 
-    private void pushConfirmationEvent(Long userId, String confirmId, String toolName, Map<String, Object> args) {
+    private void pushConfirmationEvent(Long userId, Long sessionId, String confirmId, String toolName, Map<String, Object> args) {
         try {
             Map<String, Object> content = new HashMap<>();
             content.put("confirmId", confirmId);
@@ -100,7 +100,7 @@ public class ToolConfirmationManager {
             content.put("arguments", args);
 
             String json = OBJECT_MAPPER.writeValueAsString(content);
-            SseMessageUtils.sendEvent(userId, SseEventDto.builder()
+            SseMessageUtils.sendEvent(userId, sessionId, SseEventDto.builder()
                 .event("tool_confirmation")
                 .content(json)
                 .build());

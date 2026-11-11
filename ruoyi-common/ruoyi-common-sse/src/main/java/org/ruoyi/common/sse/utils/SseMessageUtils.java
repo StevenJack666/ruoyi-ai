@@ -178,4 +178,51 @@ public class SseMessageUtils {
         }
         MANAGER.complete(emitter);
     }
+
+    /** 以下为原有方法重构（sessionId） **/
+
+    public static void sendMessage(Long userId, Long sessionId, String message) {
+        if (!isEnable()) {
+            return;
+        }
+        if (sessionId == null) {
+            MANAGER.sendMessage(userId, message);
+            return;
+        }
+        MANAGER.sendMessage(userId, sessionId, message);
+    }
+
+    public static void sendEvent(Long userId, Long sessionId, SseEventDto eventDto) {
+        if (!isEnable()) {
+            return;
+        }
+        if (sessionId == null) {
+            MANAGER.sendEvent(userId, eventDto);
+            return;
+        }
+        MANAGER.sendEvent(userId, sessionId, eventDto);
+    }
+
+    public static void sendContent(Long userId, Long sessionId, String content) {
+        sendEvent(userId, sessionId, SseEventDto.content(content));
+    }
+
+    public static void sendReasoning(Long userId, Long sessionId, String reasoningContent) {
+        sendEvent(userId, sessionId, SseEventDto.reasoning(reasoningContent));
+    }
+
+    public static void sendDone(Long userId, Long sessionId) {
+        sendEvent(userId, sessionId, SseEventDto.done());
+    }
+
+    public static void sendError(Long userId, Long sessionId, String error) {
+        sendEvent(userId, sessionId, SseEventDto.error(error));
+    }
+
+    /**
+     * 完成指定用户会话的 SSE 连接
+     */
+    public static void completeConnection(Long userId, Long sessionId) {
+        MANAGER.disconnectSession(userId, sessionId);
+    }
 }
