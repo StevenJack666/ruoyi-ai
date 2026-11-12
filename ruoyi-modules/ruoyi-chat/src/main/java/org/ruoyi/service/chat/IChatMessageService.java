@@ -95,4 +95,14 @@ public interface IChatMessageService {
      * @param modelName 模型名称
      */
     Long saveChatMessage(Long userId, Long sessionId, String content, String role, String modelName);
+
+    /**
+     * 更新消息内容
+     */
+    Boolean updateMessageContent(Long messageId, String content);
+
+    /**
+     * 删除消息
+     */
+    Boolean deleteMessageById(Long messageId);
 }

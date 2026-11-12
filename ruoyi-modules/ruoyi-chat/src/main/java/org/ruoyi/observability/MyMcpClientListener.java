@@ -12,6 +12,7 @@ import dev.langchain4j.service.tool.ToolExecutionResult;
 import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.sse.dto.SseEventDto;
 import org.ruoyi.common.sse.utils.SseMessageUtils;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -32,18 +33,24 @@ public class MyMcpClientListener implements McpClientListener {
 
     private final Long userId;
     private final Long sessionId;
+    private final SseEmitter emitter;
 
     public MyMcpClientListener(Long userId) {
-        this(userId, null);
+        this(userId, null, null);
     }
 
     public MyMcpClientListener(Long userId, Long sessionId) {
+        this(userId, sessionId, null);
+    }
+
+    public MyMcpClientListener(Long userId, Long sessionId, SseEmitter emitter) {
         this.userId = userId;
         this.sessionId = sessionId;
+        this.emitter = emitter;
     }
 
     public MyMcpClientListener() {
-        this(null, null);
+        this(null, null, null);
     }
 
     // ==================== 工具执行 ====================
@@ -144,10 +151,17 @@ public class MyMcpClientListener implements McpClientListener {
             content.put("result", result);
 
             String json = OBJECT_MAPPER.writeValueAsString(content);
-            SseMessageUtils.sendEvent(userId, sessionId, SseEventDto.builder()
+
+            SseEventDto dto = SseEventDto.builder()
                 .event("mcp")
                 .content(json)
-                .build());
+                .build();
+
+            if (emitter != null) {
+                SseMessageUtils.sendEvent(emitter, dto);
+            } else {
+                SseMessageUtils.sendEvent(userId, sessionId, dto);
+            }
         } catch (JsonProcessingException e) {
             log.error("序列化 MCP 事件失败: {}", e.getMessage());
         }

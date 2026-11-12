@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.ruoyi.common.core.utils.SpringUtils;
 import org.ruoyi.domain.result.InterceptResult;
 import org.ruoyi.mcp.service.core.ToolConfirmationManager;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.*;
 
@@ -18,16 +19,29 @@ public class GobalToolExecutor implements ToolExecutor {
     private final ToolExecutor originalExecutor;
     private final Long userId;
     private final Long sessionId;
+    private final SseEmitter emitter;
     private final List<ToolInterceptStrategy> strategies;
 
     private final ToolConfirmationManager confirmationManager = SpringUtils.getBean(ToolConfirmationManager.class);
 
 
+    public GobalToolExecutor(ToolExecutor originalExecutor, Long userId) {
+        this(originalExecutor, userId, null, null);
+    }
+
     public GobalToolExecutor(ToolExecutor originalExecutor, Long userId, Long sessionId) {
+        this(originalExecutor, userId, sessionId, null);
+    }
+
+    public GobalToolExecutor(ToolExecutor originalExecutor, Long userId,
+                             Long sessionId, SseEmitter emitter) {
         this.originalExecutor = originalExecutor;
         this.userId = userId;
         this.sessionId = sessionId;
-        this.strategies = new ArrayList<>(applicationContext.getBeansOfType(ToolInterceptStrategy.class).values());
+        this.emitter = emitter;
+        this.strategies = new ArrayList<>(
+            applicationContext.getBeansOfType(ToolInterceptStrategy.class).values()
+        );
     }
 
     @Override
@@ -44,7 +58,9 @@ public class GobalToolExecutor implements ToolExecutor {
                 if (!result.isShouldContinue() && confirmationManager != null) {
                     log.info("🛑 工具 [{}] 已被策略拦截，开始阻塞等待用户确认...", toolName);
                     Map<String, Object> args = Json.fromJson(request.arguments(), Map.class);
-                    String confirmId = confirmationManager.createConfirmation(userId, sessionId, toolName, args);
+                    String confirmId = confirmationManager.createConfirmation(
+                        userId, sessionId, emitter, toolName, args
+                    );
                     // 最长等待 2 分钟
                     boolean approved = confirmationManager.waitForConfirmation(confirmId);
                     if (!approved) {

@@ -125,4 +125,8 @@ public class ChatRequest {
      */
     private String fileMetaData;
 
+    /**
+     * 本轮回答对应的 assistant 占位消息ID
+     */
+    private Long assistantMessageId;
 }

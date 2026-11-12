@@ -41,16 +41,14 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
 import org.ruoyi.agent.*;
 import org.ruoyi.agent.tool.ExecuteSqlQueryTool;
 import org.ruoyi.agent.tool.QueryAllTablesTool;
@@ -222,6 +220,10 @@ public class ChatServiceFacade implements IChatService {
     private static final Map<Object, MessageWindowChatMemory> memoryCache =
         new ConcurrentHashMap<>();
 
+    private static final String CHAT_MESSAGE_LOCK_PREFIX = "chat:message:lock:";
+    private static final long LOCK_WAIT_SECONDS = 5L;
+    private static final long LOCK_LEASE_SECONDS = 30L;
+
     // ChatServiceFacade.java
     // todo 文件上传，应该返回文件列表
     public List<Long> attachSessionFile(
@@ -281,9 +283,6 @@ public class ChatServiceFacade implements IChatService {
         // 4. 具体的服务实现
         Long userId = LoginHelper.getUserId();
         String tokenValue = StpUtil.getTokenValue();
-        Long sessionId = chatRequest.getSessionId();
-        // 按「用户 + 会话」建立 SSE 连接，同一用户多个会话各自独立，避免消息串台
-        SseEmitter emitter = sseEmitterManager.connectSession(userId, sessionId);
 
         // 0. 智能体解析：传入 agentId 时按智能体绑定的模型覆盖 model 字段
         //    （前端默认走智能体；enableThinking 不再作为对话模式开关，Supervisor 多 Agent 编排成为默认智能体路径）
@@ -320,7 +319,6 @@ public class ChatServiceFacade implements IChatService {
             chatRequest,
             agentVo
         );
-        chatRequest.setEmitter(emitter);
         chatRequest.setUserId(userId);
         chatRequest.setTokenValue(tokenValue);
         chatRequest.setChatModelVo(chatModelVo);
@@ -337,17 +335,57 @@ public class ChatServiceFacade implements IChatService {
      * 处理聊天消息
      */
     private void processChatMessage(ChatRequest chatRequest, Long userId) {
-        // 获取是否上传文件
+        Long sessionId = chatRequest.getSessionId();
+
+        // 没有会话ID时无法保证跨请求顺序，按原逻辑处理
+        if (sessionId == null) {
+            doProcessChatMessage(chatRequest, userId);
+            createAssistantPlaceholder(chatRequest, userId);
+            return;
+        }
+
+        RLock lock = RedisUtils.getClient().getLock(
+            CHAT_MESSAGE_LOCK_PREFIX + sessionId
+        );
+
+        boolean locked = false;
+        try {
+            // 等待 5 秒，锁租期 30 秒：只保护两条 insert，时间足够
+            locked = lock.tryLock(
+                LOCK_WAIT_SECONDS,
+                LOCK_LEASE_SECONDS,
+                TimeUnit.SECONDS
+            );
+            if (!locked) {
+                throw new ServiceException("当前会话消息正在处理中，请稍后重试");
+            }
+
+            // 关键：用户消息 + assistant 占位必须连续插入
+            doProcessChatMessage(chatRequest, userId);
+            createAssistantPlaceholder(chatRequest, userId);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ServiceException("当前会话消息正在处理中，请稍后重试");
+        } finally {
+            // 锁可能已过期，必须判断当前线程是否仍持有
+            if (locked && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 处理上传文件
+     */
+    private void doProcessChatMessage(ChatRequest chatRequest, Long userId) {
         boolean isUploadFile =
             chatRequest.getIsUploadFile() != null &&
-            chatRequest.getIsUploadFile();
+                chatRequest.getIsUploadFile();
         if (isUploadFile) {
-            // 1. 非上传文件场景：保存用户输入的文本消息
             List<Long> ossIds = chatRequest.getOssIds();
             if (CollectionUtils.isEmpty(ossIds)) {
                 throw new ServiceException("上传的文件信息为空！");
             }
-            // 2. 存储消息
             Long messageId = chatMessageService.saveChatMessage(
                 userId,
                 chatRequest.getSessionId(),
@@ -358,7 +396,6 @@ public class ChatServiceFacade implements IChatService {
             if (null == messageId) {
                 throw new ServiceException("存储消息异常：获取不到消息ID主键");
             }
-            // 3. 保存关联对象
             List<SessionMessageFileRel> messageFileList = new ArrayList<>();
             for (Long ossId : ossIds) {
                 SessionMessageFileRel sessionMessageFileRel =
@@ -373,7 +410,7 @@ public class ChatServiceFacade implements IChatService {
             }
             return;
         }
-        // 非文件：存储消息
+
         chatMessageService.saveChatMessage(
             userId,
             chatRequest.getSessionId(),
@@ -381,6 +418,24 @@ public class ChatServiceFacade implements IChatService {
             RoleType.USER.getName(),
             chatRequest.getModel()
         );
+    }
+
+    /**
+     * 为本次回答预占一条 assistant 消息行，保证刷新后问答成对、顺序稳定
+     */
+    private void createAssistantPlaceholder(ChatRequest chatRequest, Long userId) {
+        if (Boolean.TRUE.equals(chatRequest.getEnableWorkFlow())
+            || Boolean.TRUE.equals(chatRequest.getIsResume())) {
+            return;
+        }
+        Long assistantMessageId = chatMessageService.saveChatMessage(
+            userId,
+            chatRequest.getSessionId(),
+            "",
+            RoleType.ASSISTANT.getName(),
+            chatRequest.getModel()
+        );
+        chatRequest.setAssistantMessageId(assistantMessageId);
     }
 
     /**
@@ -416,12 +471,13 @@ public class ChatServiceFacade implements IChatService {
             if (ObjectUtils.isEmpty(reSumeRunner)) {
                 log.warn("人机交互恢复参数为空");
             }
+            SseEmitter emitter = ensureChatEmitter(chatRequest);
             workFlowStarterService.resumeFlow(
                 reSumeRunner.getRuntimeUuid(),
                 reSumeRunner.getFeedbackContent(),
-                chatRequest.getEmitter()
+                emitter
             );
-            return chatRequest.getEmitter();
+            return emitter;
         }
 
         // 模式2：智能体对话（默认走 Supervisor 多 Agent 编排）
@@ -448,8 +504,8 @@ public class ChatServiceFacade implements IChatService {
 
         ChatModel plannerModel = chatService.buildChatModel(chatModelVo);
         Long userId = chatRequest.getUserId();
-        String tokenValue = chatRequest.getTokenValue();
         Long sessionId = chatRequest.getSessionId();
+        SseEmitter emitter = ensureChatEmitter(chatRequest);
 
         // ===== 1. 文档 / 知识库注入（快速通道与 Supervisor 共用）=====
         String sessionDocContext = prepareAgentContext(chatRequest, agentVo);
@@ -461,19 +517,13 @@ public class ChatServiceFacade implements IChatService {
             boolean hasDoc = StringUtils.isNotEmpty(sessionDocContext);
             // 上传了文件但拿不到内容：多半是解析未完成或分块过期
             if (Boolean.TRUE.equals(chatRequest.getIsUploadFile()) && !hasDoc) {
-                // 上传了文件但拿不到内容：多半是解析未完成或分块过期
-                log.info(
-                    "直连回答未获取到文档内容，可能仍在解析: sessionId={}, ossIds={}",
-                    chatRequest.getSessionId(),
-                    chatRequest.getOssIds()
-                );
+                discardAssistantPlaceholder(chatRequest);
                 SseMessageUtils.sendContent(
-                    userId,
-                    sessionId,
+                    emitter,
                     "文档仍在解析中或未解析出内容，请稍后重试"
                 );
-                SseMessageUtils.completeConnection(userId, tokenValue);
-                return chatRequest.getEmitter();
+                SseMessageUtils.complete(emitter);
+                return emitter;
             }
             return answerQuickly(chatRequest, chatModelVo, chatService, hasDoc, agentVo);
         }
@@ -487,7 +537,7 @@ public class ChatServiceFacade implements IChatService {
                 agentVo.getMcpToolIds()
             );
         } else {
-            toolProvider = buildDefaultMcpToolProvider(userId, sessionId);
+            toolProvider = buildDefaultMcpToolProvider(userId, sessionId, emitter);
         }
 
         // 结合工具获取拦截器
@@ -508,7 +558,8 @@ public class ChatServiceFacade implements IChatService {
                     ToolExecutor wrappedExecutor = new GobalToolExecutor(
                         originalExecutor,
                         userId,
-                        sessionId
+                        sessionId,
+                        emitter
                     );
                     builder.add(spec, wrappedExecutor);
                 }
@@ -556,26 +607,19 @@ public class ChatServiceFacade implements IChatService {
         CompletableFuture.runAsync(() -> {
             try {
                 String result = supervisor.invoke(prompt);
-                SseMessageUtils.sendContent(userId, sessionId, result);
-                SseMessageUtils.sendDone(userId, sessionId);
-                // 保存助手回复到数据库（智能体对话为默认路径后，需在此落库以保留历史）
-                if (StringUtils.isNotBlank(result)) {
-                    chatMessageService.saveChatMessage(
-                        userId,
-                        chatRequest.getSessionId(),
-                        result,
-                        RoleType.ASSISTANT.getName(),
-                        chatRequest.getModel()
-                    );
-                }
+                SseMessageUtils.sendContent(emitter, result);
+                SseMessageUtils.sendDone(emitter);
+                saveAssistantMessage(chatRequest, userId, result);
             } catch (Exception e) {
                 log.error("Supervisor 执行失败", e);
-                SseMessageUtils.sendError(userId, sessionId, e.getMessage());
+                discardAssistantPlaceholder(chatRequest);
+                SseMessageUtils.sendError(emitter, e.getMessage());
             } finally {
-                SseMessageUtils.completeConnection(userId, sessionId);
+                SseMessageUtils.complete(emitter);
             }
         }, chatTaskExecutor);
-        return chatRequest.getEmitter();
+        return emitter;
+
     }
 
     /**
@@ -650,7 +694,6 @@ public class ChatServiceFacade implements IChatService {
 
         // 获取配置
         Long userId = chatRequest.getUserId();
-        String tokenValue = chatRequest.getTokenValue();
         String tenantId = TenantHelper.getTenantId();
 
         log.info(
@@ -669,7 +712,7 @@ public class ChatServiceFacade implements IChatService {
         if (streamingModel != null) {
             streamingModel.chat(
                 messages,
-                createResponseHandler(userId, tokenValue, chatRequest)
+                createResponseHandler(userId, chatRequest)
             );
             return chatRequest.getEmitter();
         }
@@ -781,8 +824,7 @@ public class ChatServiceFacade implements IChatService {
         String tenantId
     ) {
         Long userId = chatRequest.getUserId();
-        Long sessionId = chatRequest.getSessionId();
-        String tokenValue = chatRequest.getTokenValue();
+        SseEmitter emitter = chatRequest.getEmitter();
 
         Runnable task = () -> {
             long start = System.currentTimeMillis();
@@ -801,13 +843,14 @@ public class ChatServiceFacade implements IChatService {
                 if (StringUtils.isNotBlank(result)) {
                     saveAssistantMessage(chatRequest, userId, result);
                 }
-                SseMessageUtils.sendContent(userId, sessionId, result);
-                SseMessageUtils.sendDone(userId, sessionId);
+                SseMessageUtils.sendContent(emitter, result);
+                SseMessageUtils.sendDone(emitter);
             } catch (Exception e) {
                 log.error("文档问答执行失败", e);
-                SseMessageUtils.sendError(userId, sessionId, e.getMessage());
+                discardAssistantPlaceholder(chatRequest);
+                SseMessageUtils.sendError(emitter, e.getMessage());
             } finally {
-                SseMessageUtils.completeConnection(userId, sessionId);
+                SseMessageUtils.complete(emitter);
             }
         };
 
@@ -819,13 +862,26 @@ public class ChatServiceFacade implements IChatService {
         } catch (RejectedExecutionException e) {
             // AbortPolicy：队列满会在请求线程同步抛出
             log.error("聊天线程池已满，拒绝执行", e);
-            SseMessageUtils.sendError(userId, sessionId, "当前对话请求过多，请稍后重试");
-            SseMessageUtils.completeConnection(userId, sessionId);
+            discardAssistantPlaceholder(chatRequest);
+            SseMessageUtils.sendError(emitter, "当前对话请求过多，请稍后重试");
+            SseMessageUtils.complete(emitter);
         }
         return chatRequest.getEmitter();
     }
 
+    /**
+     * 保存大模型回复（占位符）
+     */
     private void saveAssistantMessage(ChatRequest chatRequest, Long userId, String content) {
+        if (StringUtils.isBlank(content)) {
+            discardAssistantPlaceholder(chatRequest);
+            return;
+        }
+        Long placeholderId = chatRequest.getAssistantMessageId();
+        if (placeholderId != null) {
+            chatMessageService.updateMessageContent(placeholderId, content);
+            return;
+        }
         chatMessageService.saveChatMessage(
             userId,
             chatRequest.getSessionId(),
@@ -836,9 +892,21 @@ public class ChatServiceFacade implements IChatService {
     }
 
     /**
+     * 删除占位符
+     */
+    private void discardAssistantPlaceholder(ChatRequest chatRequest) {
+        Long placeholderId = chatRequest.getAssistantMessageId();
+        if (placeholderId != null) {
+            chatMessageService.deleteMessageById(placeholderId);
+            chatRequest.setAssistantMessageId(null);
+        }
+    }
+
+
+    /**
      * 兜底 MCP 工具装配（无智能体时使用，保留原有 3 个硬编码客户端逻辑）
      */
-    private ToolProvider buildDefaultMcpToolProvider(Long userId, Long sessionId) {
+    private ToolProvider buildDefaultMcpToolProvider(Long userId, Long sessionId, SseEmitter emitter) {
         String npxCommand = resolveNpxCommand();
         McpTransport playwrightTransport = new StdioMcpTransport.Builder()
             .command(List.of(npxCommand, "-y", "@playwright/mcp@latest"))
@@ -846,7 +914,7 @@ public class ChatServiceFacade implements IChatService {
             .build();
         McpClient playwrightMcpClient = new DefaultMcpClient.Builder()
             .transport(playwrightTransport)
-            .listener(new MyMcpClientListener(userId, sessionId))
+            .listener(new MyMcpClientListener(userId, sessionId, emitter))
             .build();
 
         String userDir = System.getProperty("user.dir");
@@ -863,7 +931,7 @@ public class ChatServiceFacade implements IChatService {
             .build();
         McpClient filesystemMcpClient = new DefaultMcpClient.Builder()
             .transport(filesystemTransport)
-            .listener(new MyMcpClientListener(userId, sessionId))
+            .listener(new MyMcpClientListener(userId, sessionId, emitter))
             .build();
 
         return McpToolProvider.builder()
@@ -1167,6 +1235,7 @@ public class ChatServiceFacade implements IChatService {
      * @param chatRequest     聊天请求
      */
     private SseEmitter handleThinkingMode(ChatRequest chatRequest) {
+
         // 配置监督者模型
         QwenChatModel plannerModel = QwenChatModel.builder()
             .apiKey(chatRequest.getChatModelVo().getApiKey())
@@ -1187,9 +1256,10 @@ public class ChatServiceFacade implements IChatService {
 
         Long userId = chatRequest.getUserId();
         Long sessionId = chatRequest.getSessionId();
+        SseEmitter emitter = ensureChatEmitter(chatRequest);
         McpClient bingMcpClient = new DefaultMcpClient.Builder()
             .transport(bingTransport)
-            .listener(new MyMcpClientListener(userId))
+            .listener(new MyMcpClientListener(userId, sessionId, emitter))
             .build();
 
         // Playwright MCP 客户端 - 浏览器自动化工具
@@ -1206,7 +1276,7 @@ public class ChatServiceFacade implements IChatService {
 
         McpClient playwrightMcpClient = new DefaultMcpClient.Builder()
             .transport(playwrightTransport)
-            .listener(new MyMcpClientListener(userId))
+            .listener(new MyMcpClientListener(userId, sessionId, emitter))
             .build();
 
         // Filesystem MCP 客户端 - 文件管理工具
@@ -1227,7 +1297,7 @@ public class ChatServiceFacade implements IChatService {
 
         McpClient filesystemMcpClient = new DefaultMcpClient.Builder()
             .transport(filesystemTransport)
-            .listener(new MyMcpClientListener(userId))
+            .listener(new MyMcpClientListener(userId, sessionId, emitter))
             .build();
 
         List<McpClient> mcpClients = new ArrayList<>();
@@ -1245,7 +1315,7 @@ public class ChatServiceFacade implements IChatService {
 
             McpClient httpMcpClient = new DefaultMcpClient.Builder()
                 .transport(httpMcpTransport)
-                .listener(new MyMcpClientListener(userId))
+                .listener(new MyMcpClientListener(userId, sessionId, emitter))
                 .build();
 
             mcpClients.add(httpMcpClient);
@@ -1274,8 +1344,9 @@ public class ChatServiceFacade implements IChatService {
                     ToolExecutor originalExecutor = entry.getValue();
                     ToolExecutor wrappedExecutor = new GobalToolExecutor(
                         originalExecutor,
+                        userId,
                         sessionId,
-                        userId
+                        emitter
                     );
                     builder.add(spec, wrappedExecutor);
                 }
@@ -1380,23 +1451,15 @@ public class ChatServiceFacade implements IChatService {
         CompletableFuture.runAsync(() -> {
             try {
                 String result = supervisor.invoke(chatRequest.getContent());
-                SseMessageUtils.sendContent(userId, result);
-                SseMessageUtils.sendDone(userId);
-                // 持久化DB
-                if (StringUtils.isNotEmpty(result)) {
-                    chatMessageService.saveChatMessage(
-                        userId,
-                        chatRequest.getSessionId(),
-                        result,
-                        RoleType.ASSISTANT.getName(),
-                        chatRequest.getModel()
-                    );
-                }
+                SseMessageUtils.sendContent(emitter, result);
+                SseMessageUtils.sendDone(emitter);
+                saveAssistantMessage(chatRequest, userId, result);
             } catch (Exception e) {
                 log.error("Supervisor 执行失败", e);
-                SseMessageUtils.sendError(userId, e.getMessage());
+                discardAssistantPlaceholder(chatRequest);
+                SseMessageUtils.sendError(emitter, e.getMessage());
             } finally {
-                SseMessageUtils.completeConnection(userId, tokenValue);
+                SseMessageUtils.complete(emitter);
             }
         });
         return chatRequest.getEmitter();
@@ -1589,64 +1652,41 @@ public class ChatServiceFacade implements IChatService {
      * 创建标准的响应处理器
      *
      * @param userId      用户ID
-     * @param tokenValue  会话令牌
      * @return 标准的流式响应处理器
      */
     protected StreamingChatResponseHandler createResponseHandler(
         Long userId,
-        String tokenValue,
         ChatRequest chatRequest
     ) {
-        Long sessionId = chatRequest.getSessionId();
+        SseEmitter emitter = chatRequest.getEmitter();
         return new StreamingChatResponseHandler() {
             private final StringBuilder messageBuffer = new StringBuilder();
 
-            @SneakyThrows
             @Override
             public void onPartialResponse(String partialResponse) {
-                // 将消息片段追加到缓冲区
                 messageBuffer.append(partialResponse);
-
-                // 实时发送内容事件到客户端
-                SseMessageUtils.sendContent(userId, sessionId, partialResponse);
-                log.debug("收到消息片段: {}", partialResponse);
+                SseMessageUtils.sendContent(emitter, partialResponse);
             }
 
             @Override
             public void onCompleteResponse(ChatResponse completeResponse) {
                 try {
-                    // 发送完成事件
-                    SseMessageUtils.sendDone(userId, sessionId);
-
-                    // 消息流完成，保存消息到数据库和内存
-                    String fullMessage = messageBuffer.toString();
-
-                    if (fullMessage.isEmpty()) {
-                        log.warn("接收到空消息");
-                    } else {
-                        // 保存助手回复消息
-                        chatMessageService.saveChatMessage(
-                            userId,
-                            chatRequest.getSessionId(),
-                            fullMessage,
-                            RoleType.ASSISTANT.getName(),
-                            chatRequest.getModel()
-                        );
-                    }
-
-                    // 关闭SSE连接
-                    SseMessageUtils.completeConnection(userId, sessionId);
-                    log.info("消息结束，已保存到数据库");
+                    SseMessageUtils.sendDone(emitter);
+                    saveAssistantMessage(chatRequest, userId, messageBuffer.toString());
                 } catch (Exception e) {
                     log.error("完成响应时出错: {}", e.getMessage(), e);
+                    discardAssistantPlaceholder(chatRequest);
+                } finally {
+                    SseMessageUtils.complete(emitter);
                 }
             }
 
             @Override
             public void onError(Throwable error) {
-                // 发送错误事件
-                SseMessageUtils.sendError(userId, sessionId, error.getMessage());
+                discardAssistantPlaceholder(chatRequest);
+                SseMessageUtils.sendError(emitter, error.getMessage());
                 log.error("流式响应错误: {}", error.getMessage());
+                SseMessageUtils.complete(emitter);
             }
         };
     }
@@ -2169,6 +2209,44 @@ public class ChatServiceFacade implements IChatService {
             log.error("聊天线程池已满，挡板请求被拒绝", e);
             SseMessageUtils.sendError(emitter, "当前对话请求过多，请稍后重试");
             SseMessageUtils.complete(emitter);
+        }
+        return emitter;
+    }
+
+    /**
+     * 请求级 SSE：每次 /chat/send 独立 emitter，互不广播、互不覆盖
+     */
+    private SseEmitter ensureChatEmitter(ChatRequest chatRequest) {
+        SseEmitter emitter = chatRequest.getEmitter();
+        if (emitter != null) {
+            return emitter;
+        }
+        emitter = createChatEmitter(chatRequest.getUserId(), chatRequest.getSessionId());
+        chatRequest.setEmitter(emitter);
+        return emitter;
+    }
+
+    /**
+     * 创建对话SseEmitter连接对象
+     * @param userId 用户
+     * @param sessionId 对话
+     * @return 返回SseEmitter连接对象
+     */
+    private SseEmitter createChatEmitter(Long userId, Long sessionId) {
+        SseEmitter emitter = new SseEmitter(86400000L);
+        emitter.onCompletion(() ->
+            log.debug("Chat SSE 完成: userId={}, sessionId={}", userId, sessionId));
+        emitter.onTimeout(() ->
+            log.debug("Chat SSE 超时: userId={}, sessionId={}", userId, sessionId));
+        emitter.onError(e ->
+            log.debug("Chat SSE 异常: userId={}, sessionId={}, error={}",
+                userId, sessionId, e.getMessage()));
+
+        try {
+            emitter.send(SseEmitter.event().comment("connected"));
+        } catch (IOException e) {
+            log.error("Chat SSE 建立失败", e);
+            emitter.completeWithError(e);
         }
         return emitter;
     }

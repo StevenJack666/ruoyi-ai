@@ -8,6 +8,7 @@ import org.ruoyi.common.sse.dto.SseEventDto;
 import org.ruoyi.common.sse.utils.SseMessageUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -38,10 +39,21 @@ public class ToolConfirmationManager {
     /**
      * 创建确认请求，推送 SSE 事件到前端
      */
-    public String createConfirmation(Long userId, Long sessionId, String toolName, Map<String, Object> args) {
+    public String createConfirmation(Long userId, String toolName, Map<String, Object> args) {
+        return createConfirmation(userId, null, null, toolName, args);
+    }
+
+    public String createConfirmation(Long userId, Long sessionId,
+                                     String toolName, Map<String, Object> args) {
+        return createConfirmation(userId, sessionId, null, toolName, args);
+    }
+
+    public String createConfirmation(Long userId, Long sessionId, SseEmitter emitter,
+                                     String toolName, Map<String, Object> args) {
         String confirmId = UUID.randomUUID().toString().replace("-", "");
-        pushConfirmationEvent(userId, sessionId, confirmId, toolName, args);
-        log.info("创建工具确认请求并推入Redis监听: confirmId={}, userId={}, sessionId={}", confirmId, userId, sessionId);
+        pushConfirmationEvent(userId, sessionId, emitter, confirmId, toolName, args);
+        log.info("创建工具确认请求并推入Redis监听: confirmId={}, userId={}, sessionId={}",
+            confirmId, userId, sessionId);
         return confirmId;
     }
 
@@ -92,7 +104,9 @@ public class ToolConfirmationManager {
         }
     }
 
-    private void pushConfirmationEvent(Long userId, Long sessionId, String confirmId, String toolName, Map<String, Object> args) {
+    private void pushConfirmationEvent(Long userId, Long sessionId, SseEmitter emitter,
+                                       String confirmId, String toolName,
+                                       Map<String, Object> args) {
         try {
             Map<String, Object> content = new HashMap<>();
             content.put("confirmId", confirmId);
@@ -100,10 +114,16 @@ public class ToolConfirmationManager {
             content.put("arguments", args);
 
             String json = OBJECT_MAPPER.writeValueAsString(content);
-            SseMessageUtils.sendEvent(userId, sessionId, SseEventDto.builder()
+            SseEventDto dto = SseEventDto.builder()
                 .event("tool_confirmation")
                 .content(json)
-                .build());
+                .build();
+
+            if (emitter != null) {
+                SseMessageUtils.sendEvent(emitter, dto);
+            } else {
+                SseMessageUtils.sendEvent(userId, sessionId, dto);
+            }
         } catch (Exception e) {
             log.error("推送工具确认事件失败: {}", e.getMessage());
         }

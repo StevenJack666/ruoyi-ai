@@ -152,6 +152,7 @@ public class ChatMessageServiceImpl implements IChatMessageService {
         lqw.eq(StringUtils.isNotBlank(bo.getRole()), ChatMessage::getRole, bo.getRole());
         lqw.eq(bo.getTotalTokens() != null, ChatMessage::getTotalTokens, bo.getTotalTokens());
         lqw.like(StringUtils.isNotBlank(bo.getModelName()), ChatMessage::getModelName, bo.getModelName());
+        lqw.ne(ChatMessage::getContent, "");
         return lqw;
     }
 
@@ -237,6 +238,9 @@ public class ChatMessageServiceImpl implements IChatMessageService {
         List<ChatMessageVo> voList = queryList(bo);
 
         for (ChatMessageVo chatMessageVo : voList) {
+            if (StringUtils.isBlank(chatMessageVo.getContent())) {
+                continue;
+            }
             switch (chatMessageVo.getRole()) {
                 case "user" -> chatMessageList.add(UserMessage.from(chatMessageVo.getContent()));
                 case "assistant" -> chatMessageList.add(AiMessage.from(chatMessageVo.getContent()));
@@ -296,5 +300,30 @@ public class ChatMessageServiceImpl implements IChatMessageService {
             log.error("保存聊天消息时出错: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    /**
+     * 修改消息内容
+     */
+    @Override
+    public Boolean updateMessageContent(Long messageId, String content) {
+        if (messageId == null) {
+            return false;
+        }
+        ChatMessage update = new ChatMessage();
+        update.setId(messageId);
+        update.setContent(content);
+        return baseMapper.updateById(update) > 0;
+    }
+
+    /**
+     * 删除消息内容
+     */
+    @Override
+    public Boolean deleteMessageById(Long messageId) {
+        if (messageId == null) {
+            return false;
+        }
+        return baseMapper.deleteById(messageId) > 0;
     }
 }
