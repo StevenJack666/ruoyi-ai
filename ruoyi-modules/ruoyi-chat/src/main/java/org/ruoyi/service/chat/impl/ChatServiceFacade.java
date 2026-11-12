@@ -42,6 +42,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import jakarta.annotation.Resource;
@@ -220,9 +221,28 @@ public class ChatServiceFacade implements IChatService {
     private static final Map<Object, MessageWindowChatMemory> memoryCache =
         new ConcurrentHashMap<>();
 
+    /**
+     * 分布式锁相关设置
+     */
     private static final String CHAT_MESSAGE_LOCK_PREFIX = "chat:message:lock:";
     private static final long LOCK_WAIT_SECONDS = 5L;
     private static final long LOCK_LEASE_SECONDS = 30L;
+
+    /**
+     * 挡板超时时间
+     */
+    private static final long MOCK_SSE_TIMEOUT_MS = 30_000L;
+
+    /**
+     * 设置连接上限
+     */
+    private static final Semaphore MOCK_SSE_PERMITS = new Semaphore(300);
+
+    /**
+     * 挡板相关配置
+     */
+    private volatile Boolean mockFlag;
+    private volatile long mockFlagExpireAt;
 
     // ChatServiceFacade.java
     // todo 文件上传，应该返回文件列表
@@ -2159,8 +2179,18 @@ public class ChatServiceFacade implements IChatService {
      * 获取挡板标识
      */
     private boolean getMock(){
+        long now = System.currentTimeMillis();
+        Boolean cached = mockFlag;
+        if (cached != null && now < mockFlagExpireAt) {
+            return cached;
+        }
+
         String config = sysConfigService.selectConfigByKey(SYS_CONFIG_MOCK_KEY);
-        return StringUtils.isEmpty(config) ? Boolean.FALSE : Boolean.valueOf(config);
+        boolean value = StringUtils.isNotEmpty(config) && Boolean.parseBoolean(config);
+
+        mockFlag = value;
+        mockFlagExpireAt = now + 5_000L;
+        return value;
     }
 
     /**
@@ -2172,44 +2202,44 @@ public class ChatServiceFacade implements IChatService {
         Long userId = LoginHelper.getUserId();
         String tokenValue = StpUtil.getTokenValue();
 
-        SseEmitter emitter = new SseEmitter(86400000L);
-
-        emitter.onCompletion(() ->
-            log.debug("挡板 SSE 完成: userId={}, token={}", userId, tokenValue));
-        emitter.onTimeout(() ->
-            log.debug("挡板 SSE 超时: userId={}, token={}", userId, tokenValue));
-        emitter.onError(e ->
-            log.debug("挡板 SSE 异常: userId={}, token={}, error={}",
-                userId, tokenValue, e.getMessage()));
-
-        try {
-            // 与正常 SSE 保持一致，先通知客户端连接已建立
-            emitter.send(SseEmitter.event().comment("connected"));
-        } catch (IOException e) {
-            log.error("挡板 SSE 建立失败", e);
-            emitter.completeWithError(e);
-            return emitter;
+        if (!MOCK_SSE_PERMITS.tryAcquire()) {
+            throw new ServiceException("当前对话连接数过多，请稍后重试");
         }
 
+        SseEmitter emitter = new SseEmitter(MOCK_SSE_TIMEOUT_MS);
+
         try {
-            CompletableFuture.runAsync(() -> {
+            emitter.onCompletion(() ->
+                log.debug("挡板 SSE 完成: userId={}, token={}", userId, tokenValue));
+
+            emitter.onTimeout(() -> {
+                log.warn("挡板 SSE 超时: userId={}, token={}", userId, tokenValue);
                 try {
-                    // 与正常回答保持一致的事件协议：content -> done
-                    SseMessageUtils.sendContent(emitter, "操作成功");
-                    SseMessageUtils.sendDone(emitter);
-                } catch (Exception e) {
-                    log.error("挡板响应发送失败", e);
-                } finally {
-                    // 只关闭本次请求自己的 emitter
-                    SseMessageUtils.complete(emitter);
+                    emitter.complete();
+                } catch (Exception ignore) {
                 }
-            }, chatTaskExecutor);
-        } catch (RejectedExecutionException e) {
-            // AbortPolicy：队列满会在请求线程同步抛出
-            log.error("聊天线程池已满，挡板请求被拒绝", e);
-            SseMessageUtils.sendError(emitter, "当前对话请求过多，请稍后重试");
-            SseMessageUtils.complete(emitter);
+            });
+
+            emitter.onError(e ->
+                log.warn("挡板 SSE 异常: userId={}, token={}, error={}",
+                    userId, tokenValue, e.getMessage()));
+
+            emitter.send(SseEmitter.event().comment("connected"));
+            SseMessageUtils.sendContent(emitter, "操作成功");
+            SseMessageUtils.sendDone(emitter);
+        } catch (Exception e) {
+            log.warn("挡板响应发送失败: userId={}, token={}, error={}",
+                userId, tokenValue, e.getMessage());
+            try {
+                emitter.completeWithError(e);
+            } catch (Exception ignore) {}
+        } finally {
+            try {
+                emitter.complete();
+            } catch (Exception ignore) {}
+            MOCK_SSE_PERMITS.release();
         }
+
         return emitter;
     }
 
