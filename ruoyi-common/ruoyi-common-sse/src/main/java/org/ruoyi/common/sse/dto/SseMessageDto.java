@@ -26,4 +26,21 @@ public class SseMessageDto implements Serializable {
      * 需要发送的消息
      */
     private String message;
+
+    /**
+     * 兼容 main 分支的会话字段。
+     * 没有 channelKey 时按该字段路由到会话通道。
+     */
+    private String sessionId;
+
+    /**
+     * 精确 SSE 通道 key，格式：sessionId:streamId。
+     * 非空时优先于 sessionId。
+     */
+    private String channelKey;
+
+    /**
+     * 结构化事件。
+     */
+    private SseEventDto eventDto;
 }

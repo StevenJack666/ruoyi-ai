@@ -20,25 +20,33 @@ public class GobalToolExecutor implements ToolExecutor {
     private final Long userId;
     private final Long sessionId;
     private final SseEmitter emitter;
+    private final String sseChannelKey;
     private final List<ToolInterceptStrategy> strategies;
 
-    private final ToolConfirmationManager confirmationManager = SpringUtils.getBean(ToolConfirmationManager.class);
-
+    private final ToolConfirmationManager confirmationManager =
+        SpringUtils.getBean(ToolConfirmationManager.class);
 
     public GobalToolExecutor(ToolExecutor originalExecutor, Long userId) {
-        this(originalExecutor, userId, null, null);
+        this(originalExecutor, userId, null, null, null);
     }
 
     public GobalToolExecutor(ToolExecutor originalExecutor, Long userId, Long sessionId) {
-        this(originalExecutor, userId, sessionId, null);
+        this(originalExecutor, userId, sessionId, null, null);
     }
 
     public GobalToolExecutor(ToolExecutor originalExecutor, Long userId,
                              Long sessionId, SseEmitter emitter) {
+        this(originalExecutor, userId, sessionId, emitter, null);
+    }
+
+    public GobalToolExecutor(ToolExecutor originalExecutor, Long userId,
+                             Long sessionId, SseEmitter emitter,
+                             String sseChannelKey) {
         this.originalExecutor = originalExecutor;
         this.userId = userId;
         this.sessionId = sessionId;
         this.emitter = emitter;
+        this.sseChannelKey = sseChannelKey;
         this.strategies = new ArrayList<>(
             applicationContext.getBeansOfType(ToolInterceptStrategy.class).values()
         );
@@ -49,19 +57,19 @@ public class GobalToolExecutor implements ToolExecutor {
     public String execute(ToolExecutionRequest request, Object memoryId) {
         String toolName = request.name();
 
-        // 1. 遍历策略，寻找匹配项
         for (ToolInterceptStrategy strategy : strategies) {
             if (strategy.matches(toolName)) {
-                // 2. 调用【操作前方法】（比如推送 SSE 预览卡片）
-                InterceptResult result = strategy.onBeforeExecute(toolName, request.arguments(), userId);
-                // 3. 如果策略要求阻断，且配置了确认管理器
+                InterceptResult result = strategy.onBeforeExecute(
+                    toolName, request.arguments(), userId
+                );
+
                 if (!result.isShouldContinue() && confirmationManager != null) {
                     log.info("🛑 工具 [{}] 已被策略拦截，开始阻塞等待用户确认...", toolName);
                     Map<String, Object> args = Json.fromJson(request.arguments(), Map.class);
                     String confirmId = confirmationManager.createConfirmation(
-                        userId, sessionId, emitter, toolName, args
+                        userId, sessionId, emitter, sseChannelKey, toolName, args
                     );
-                    // 最长等待 2 分钟
+
                     boolean approved = confirmationManager.waitForConfirmation(confirmId);
                     if (!approved) {
                         log.info("❌ 用户拒绝或超时，取消工具调用: {}", toolName);
@@ -73,7 +81,6 @@ public class GobalToolExecutor implements ToolExecutor {
             }
         }
 
-        // 4. 放行请求，调用真实的 MCP 执行器
         log.info("🚀 放行请求，准备调用原始 MCP 工具: {}", toolName);
         return originalExecutor.execute(request, memoryId);
     }

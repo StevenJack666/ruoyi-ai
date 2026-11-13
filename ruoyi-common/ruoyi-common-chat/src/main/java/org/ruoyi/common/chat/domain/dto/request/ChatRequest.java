@@ -129,4 +129,12 @@ public class ChatRequest {
      * 本轮回答对应的 assistant 占位消息ID
      */
     private Long assistantMessageId;
+
+    /**
+     * SSE 流ID：
+     * 同一会话下多浏览器/多请求并发时，用于区分各自的 SSE 通道。
+     * 不传时由服务端为每次 /chat/send 生成唯一值。
+     * 如果前端要断线重连，可传自己的 requestId，但必须保证每次并发请求唯一。
+     */
+    private String streamId;
 }

@@ -16,13 +16,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * MCP 客户端监听器
- * <p>
- * 监听 MCP 工具执行事件，通过 SSE 推送到前端。
- * 支持用户二次确认：AI 调用工具前推送确认事件，等待用户同意后才执行。
  *
  * @author evo
  */
@@ -34,39 +30,51 @@ public class MyMcpClientListener implements McpClientListener {
     private final Long userId;
     private final Long sessionId;
     private final SseEmitter emitter;
+    private final String sseChannelKey;
+
+    public MyMcpClientListener() {
+        this(null, null, null, null);
+    }
 
     public MyMcpClientListener(Long userId) {
-        this(userId, null, null);
+        this(userId, null, null, null);
     }
 
     public MyMcpClientListener(Long userId, Long sessionId) {
-        this(userId, sessionId, null);
+        this(userId, sessionId, null, null);
     }
 
     public MyMcpClientListener(Long userId, Long sessionId, SseEmitter emitter) {
+        this(userId, sessionId, emitter, null);
+    }
+
+    public MyMcpClientListener(Long userId, Long sessionId,
+                               SseEmitter emitter, String sseChannelKey) {
         this.userId = userId;
         this.sessionId = sessionId;
         this.emitter = emitter;
-    }
-
-    public MyMcpClientListener() {
-        this(null, null, null);
+        this.sseChannelKey = sseChannelKey;
     }
 
     // ==================== 工具执行 ====================
 
     @Override
     public void beforeExecuteTool(McpCallContext context) {
-        if (!(context.message() instanceof McpCallToolRequest request)) return;
+        if (!(context.message() instanceof McpCallToolRequest request)) {
+            return;
+        }
         String name = (String) request.getParams().get("name");
-        Object arguments = request.getParams().get("arguments"); // 获取入参
+        Object arguments = request.getParams().get("arguments");
         log.info("工具调用之前：{}", name);
         pushMcpEvent(name, "pending", arguments != null ? arguments.toString() : null);
     }
 
     @Override
-    public void afterExecuteTool(McpCallContext context, ToolExecutionResult result, Map<String, Object> rawResult) {
-        if (!(context.message() instanceof McpCallToolRequest request)) return;
+    public void afterExecuteTool(McpCallContext context, ToolExecutionResult result,
+                                 Map<String, Object> rawResult) {
+        if (!(context.message() instanceof McpCallToolRequest request)) {
+            return;
+        }
         String name = (String) request.getParams().get("name");
         String resultText = result != null ? result.resultText() : "";
         log.info("工具调用之后：{}, 返回结果 {}", name, result);
@@ -90,7 +98,8 @@ public class MyMcpClientListener implements McpClientListener {
     }
 
     @Override
-    public void afterResourceGet(McpCallContext context, McpReadResourceResult result, Map<String, Object> rawResult) {
+    public void afterResourceGet(McpCallContext context, McpReadResourceResult result,
+                                 Map<String, Object> rawResult) {
         String name = getMethodName(context);
         int count = result.contents() != null ? result.contents().size() : 0;
         log.info("【MCP资源读取后】资源: {}, 数量: {}", name, count);
@@ -114,7 +123,8 @@ public class MyMcpClientListener implements McpClientListener {
     }
 
     @Override
-    public void afterPromptGet(McpCallContext context, McpGetPromptResult result, Map<String, Object> rawResult) {
+    public void afterPromptGet(McpCallContext context, McpGetPromptResult result,
+                               Map<String, Object> rawResult) {
         String name = getMethodName(context);
         int count = result.messages() != null ? result.messages().size() : 0;
         log.info("【MCP提示词获取后】提示词: {}, 消息数: {}", name, count);
@@ -140,10 +150,11 @@ public class MyMcpClientListener implements McpClientListener {
     }
 
     protected void pushMcpEvent(String name, String status, String result) {
-        if (userId == null) {
-            log.warn("userId 为空，无法推送 MCP 事件");
+        if (userId == null && sseChannelKey == null && emitter == null) {
+            log.warn("userId/sseChannelKey/emitter 均为空，无法推送 MCP 事件");
             return;
         }
+
         try {
             Map<String, Object> content = new HashMap<>();
             content.put("name", name);
@@ -157,10 +168,23 @@ public class MyMcpClientListener implements McpClientListener {
                 .content(json)
                 .build();
 
+            // 1. 优先精确 channelKey：本机直投，跨实例 Redis
+            if (sseChannelKey != null) {
+                SseMessageUtils.sendEvent(sseChannelKey, dto);
+                return;
+            }
+
+            // 2. 请求级 emitter
             if (emitter != null) {
                 SseMessageUtils.sendEvent(emitter, dto);
-            } else {
+                return;
+            }
+
+            // 3. 兼容旧路径
+            if (sessionId != null) {
                 SseMessageUtils.sendEvent(userId, sessionId, dto);
+            } else {
+                SseMessageUtils.sendEvent(userId, dto);
             }
         } catch (JsonProcessingException e) {
             log.error("序列化 MCP 事件失败: {}", e.getMessage());
@@ -168,7 +192,9 @@ public class MyMcpClientListener implements McpClientListener {
     }
 
     private String truncate(String str, int maxLen) {
-        if (str == null) return null;
+        if (str == null) {
+            return null;
+        }
         return str.length() > maxLen ? str.substring(0, maxLen) + "..." : str;
     }
 }

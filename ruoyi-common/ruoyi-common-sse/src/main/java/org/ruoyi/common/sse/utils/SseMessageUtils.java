@@ -11,7 +11,7 @@ import org.ruoyi.common.sse.dto.SseMessageDto;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * SSE工具类
+ * SSE 工具类
  *
  * @author Lion Li
  */
@@ -19,7 +19,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class SseMessageUtils {
 
-    private final static Boolean SSE_ENABLE = SpringUtils.getProperty("sse.enabled", Boolean.class, true);
+    private static final Boolean SSE_ENABLE =
+        SpringUtils.getProperty("sse.enabled", Boolean.class, true);
     private static SseEmitterManager MANAGER;
 
     static {
@@ -28,29 +29,18 @@ public class SseMessageUtils {
         }
     }
 
-    /**
-     * 向指定的SSE会话发送消息
-     * 通过 Redis Pub/Sub 广播，确保跨模块消息可达
-     *
-     * @param userId  要发送消息的用户id
-     * @param message 要发送的消息内容
-     */
+    // ======================== 用户维度 ========================
+
     public static void sendMessage(Long userId, String message) {
         if (!isEnable()) {
             return;
         }
-        // 通过 Redis 广播，让所有模块的 SseTopicListener 接收并转发到本地 SSE 连接
         SseMessageDto dto = new SseMessageDto();
         dto.setMessage(message);
         dto.setUserIds(Collections.singletonList(userId));
         MANAGER.publishMessage(dto);
     }
 
-    /**
-     * 本机全用户会话发送消息
-     *
-     * @param message 要发送的消息内容
-     */
     public static void sendMessage(String message) {
         if (!isEnable()) {
             return;
@@ -58,11 +48,6 @@ public class SseMessageUtils {
         MANAGER.sendMessage(message);
     }
 
-    /**
-     * 发布SSE订阅消息
-     *
-     * @param sseMessageDto 要发布的SSE消息对象
-     */
     public static void publishMessage(SseMessageDto sseMessageDto) {
         if (!isEnable()) {
             return;
@@ -70,11 +55,6 @@ public class SseMessageUtils {
         MANAGER.publishMessage(sseMessageDto);
     }
 
-    /**
-     * 向所有的用户发布订阅的消息(群发)
-     *
-     * @param message 要发布的消息内容
-     */
     public static void publishAll(String message) {
         if (!isEnable()) {
             return;
@@ -82,24 +62,13 @@ public class SseMessageUtils {
         MANAGER.publishAll(message);
     }
 
-
-    /**
-     * 完成指定用户的SSE连接
-     * 通过 Manager 断开连接并发送完成信号，自动触发资源清理
-     *
-     * @param userId 用户ID
-     * @param tokenValue 用户 token 值
-     */
     public static void completeConnection(Long userId, String tokenValue) {
+        if (!isEnable()) {
+            return;
+        }
         MANAGER.disconnect(userId, tokenValue);
     }
 
-    /**
-     * 向指定的SSE会话发送结构化事件
-     *
-     * @param userId   要发送消息的用户id
-     * @param eventDto SSE事件对象
-     */
     public static void sendEvent(Long userId, SseEventDto eventDto) {
         if (!isEnable()) {
             return;
@@ -107,51 +76,90 @@ public class SseMessageUtils {
         MANAGER.sendEvent(userId, eventDto);
     }
 
-    /**
-     * 发送内容事件
-     *
-     * @param userId  用户ID
-     * @param content 内容
-     */
     public static void sendContent(Long userId, String content) {
         sendEvent(userId, SseEventDto.content(content));
     }
 
-    /**
-     * 发送推理内容事件
-     *
-     * @param userId           用户ID
-     * @param reasoningContent 推理内容
-     */
     public static void sendReasoning(Long userId, String reasoningContent) {
         sendEvent(userId, SseEventDto.reasoning(reasoningContent));
     }
 
-    /**
-     * 发送完成事件
-     *
-     * @param userId 用户ID
-     */
     public static void sendDone(Long userId) {
         sendEvent(userId, SseEventDto.done());
     }
 
-    /**
-     * 发送错误事件
-     *
-     * @param userId 用户ID
-     * @param error  错误信息
-     */
     public static void sendError(Long userId, String error) {
         sendEvent(userId, SseEventDto.error(error));
     }
 
+    // ======================== 会话/流维度 ========================
+
     /**
-     * 是否开启
+     * 完成指定 SSE 通道。
+     * channelKey = sessionId:streamId
      */
+    public static void completeConnection(String channelKey) {
+        if (!isEnable() || channelKey == null) {
+            return;
+        }
+        MANAGER.disconnect(channelKey);
+    }
+
+    /**
+     * 向指定 SSE 通道发送结构化事件：
+     * 本机优先直投；本机没有连接时走 Redis 广播。
+     */
+    public static void sendEvent(String channelKey, SseEventDto eventDto) {
+        if (!isEnable() || channelKey == null) {
+            return;
+        }
+
+        // 本机有连接，直接投递
+        if (MANAGER.sendLocalEvent(channelKey, eventDto)) {
+            return;
+        }
+
+        // 本机没有连接，广播给持有连接的实例
+        SseMessageDto dto = new SseMessageDto();
+        dto.setChannelKey(channelKey);
+        dto.setEventDto(eventDto);
+        MANAGER.publishMessage(dto);
+    }
+
+    public static void sendMessage(String channelKey, String message) {
+        sendEvent(channelKey, SseEventDto.content(message));
+    }
+
+    public static void sendContent(String channelKey, String content) {
+        sendEvent(channelKey, SseEventDto.content(content));
+    }
+
+    public static void sendReasoning(String channelKey, String reasoningContent) {
+        sendEvent(channelKey, SseEventDto.reasoning(reasoningContent));
+    }
+
+    public static void sendDone(String channelKey) {
+        sendEvent(channelKey, SseEventDto.done());
+    }
+
+    public static void sendError(String channelKey, String error) {
+        sendEvent(channelKey, SseEventDto.error(error));
+    }
+
+    /**
+     * 终止性错误：error 事件带 done=true，投递后立即释放连接。
+     */
+    public static void sendErrorAndComplete(String channelKey, String error) {
+        SseEventDto terminal = SseEventDto.error(error);
+        terminal.setDone(true);
+        sendEvent(channelKey, terminal);
+    }
+
     public static Boolean isEnable() {
         return SSE_ENABLE;
     }
+
+    // ======================== 请求级 emitter ========================
 
     public static void sendEvent(SseEmitter emitter, SseEventDto eventDto) {
         if (!isEnable()) {
@@ -179,7 +187,7 @@ public class SseMessageUtils {
         MANAGER.complete(emitter);
     }
 
-    /** 以下为原有方法重构（sessionId） **/
+    // ======================== 兼容旧调用（Long sessionId） ========================
 
     public static void sendMessage(Long userId, Long sessionId, String message) {
         if (!isEnable()) {
@@ -189,7 +197,7 @@ public class SseMessageUtils {
             MANAGER.sendMessage(userId, message);
             return;
         }
-        MANAGER.sendMessage(userId, sessionId, message);
+        sendMessage(String.valueOf(sessionId), message);
     }
 
     public static void sendEvent(Long userId, Long sessionId, SseEventDto eventDto) {
@@ -200,7 +208,7 @@ public class SseMessageUtils {
             MANAGER.sendEvent(userId, eventDto);
             return;
         }
-        MANAGER.sendEvent(userId, sessionId, eventDto);
+        sendEvent(String.valueOf(sessionId), eventDto);
     }
 
     public static void sendContent(Long userId, Long sessionId, String content) {
@@ -219,10 +227,10 @@ public class SseMessageUtils {
         sendEvent(userId, sessionId, SseEventDto.error(error));
     }
 
-    /**
-     * 完成指定用户会话的 SSE 连接
-     */
     public static void completeConnection(Long userId, Long sessionId) {
-        MANAGER.disconnectSession(userId, sessionId);
+        if (!isEnable() || sessionId == null) {
+            return;
+        }
+        completeConnection(String.valueOf(sessionId));
     }
 }

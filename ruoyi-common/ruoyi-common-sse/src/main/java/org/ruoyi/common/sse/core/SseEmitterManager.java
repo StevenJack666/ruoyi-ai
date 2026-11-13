@@ -28,153 +28,236 @@ import java.util.function.Consumer;
 public class SseEmitterManager {
 
     /**
-     * 订阅的频道
+     * Redis 订阅频道
      */
-    private final static String SSE_TOPIC = "global:sse";
+    private static final String SSE_TOPIC = "global:sse";
 
     /**
-     * 会话通道前缀，避免与 token 通道的 key 冲突
+     * 会话/流维度：
+     * key = channelKey = sessionId:streamId
+     * 同一会话可以有多个连接，对应多个浏览器/多个并发请求。
      */
-    private final static String SESSION_CHANNEL_PREFIX = "session:";
+    private static final Map<String, SseEmitter> SESSION_EMITTERS = new ConcurrentHashMap<>();
 
     /**
-     * 用户通道集合：外层 key 为用户ID，内层 key 为通道标识
-     * 通道标识可以是 token（全局/长连接），也可以是 session:{sessionId}（会话隔离）
+     * 用户维度：全局通知、站内信等。
+     * key = userId
+     * value = token -> SseEmitter
      */
-    private final static Map<Long, Map<String, SseEmitter>> USER_CHANNEL_EMITTERS = new ConcurrentHashMap<>();
+    private static final Map<Long, Map<String, SseEmitter>> USER_TOKEN_EMITTERS = new ConcurrentHashMap<>();
 
     public SseEmitterManager() {
-        // 定时执行 SSE 心跳检测
         SpringUtils.getBean(ScheduledExecutorService.class)
             .scheduleWithFixedDelay(this::sseMonitor, 60L, 60L, TimeUnit.SECONDS);
     }
 
-    /**
-     * 设置会话通道
-     */
-    public static String sessionChannel(Long sessionId) {
-        return SESSION_CHANNEL_PREFIX + sessionId;
-    }
+    // ======================== 会话/流维度 ========================
 
     /**
-     * 建立与指定用户的 SSE 连接
-     *
-     * @param userId 用户的唯一标识符，用于区分不同用户的连接
-     * @param token  用户的唯一令牌，用于识别具体的连接
-     * @return 返回一个 SseEmitter 实例，客户端可以通过该实例接收 SSE 事件
+     * 生成 SSE 通道 key。
+     * sessionId=1001, streamId=abc => "1001:abc"
      */
-    public SseEmitter connect(Long userId, String token) {
-        return connectByChannel(userId, token);
-    }
-
-    /**
-     * 按「用户 + 会话」建立 SSE 连接，同一用户的多个会话互相隔离
-     *
-     * @param userId    用户ID
-     * @param sessionId 会话ID
-     * @return SseEmitter，sessionId 为空时返回 null
-     */
-    public SseEmitter connectSession(Long userId, Long sessionId) {
-        if (userId == null || sessionId == null) {
+    public static String streamKey(Long sessionId, String streamId) {
+        if (sessionId == null) {
             return null;
         }
-        return connectByChannel(userId, sessionChannel(sessionId));
+        if (streamId == null || streamId.isEmpty()) {
+            return String.valueOf(sessionId);
+        }
+        return sessionId + ":" + streamId;
     }
 
     /**
-     * 根据管道进行连接
-     * @param userId 用户的唯一标识符，用于区分不同用户的连接
-     * @param channel 管道标识（Topic）
-     * @return 返回一个 SseEmitter 实例，客户端可以通过该实例接收 SSE 事件
+     * 建立会话/流 SSE 连接。
+     * 同一个 channelKey 重复建连会替换旧连接。
      */
-    private SseEmitter connectByChannel(Long userId, String channel) {
-        Map<String, SseEmitter> emitters = USER_CHANNEL_EMITTERS.computeIfAbsent(
-            userId, k -> new ConcurrentHashMap<>()
-        );
+    public SseEmitter connect(String channelKey) {
+        if (channelKey == null) {
+            throw new IllegalArgumentException("channelKey 不能为空");
+        }
 
-        // 同一通道只保留最新连接，防止超过最大连接数
-        SseEmitter oldEmitter = emitters.remove(channel);
+        SseEmitter oldEmitter = SESSION_EMITTERS.remove(channelKey);
         if (oldEmitter != null) {
-            oldEmitter.complete();
+            safeComplete(oldEmitter);
         }
 
         SseEmitter emitter = new SseEmitter(86400000L);
-        emitters.put(channel, emitter);
+        SESSION_EMITTERS.put(channelKey, emitter);
 
-        emitter.onCompletion(() -> removeEmitter(userId, channel));
-        emitter.onTimeout(() -> removeEmitter(userId, channel));
-        emitter.onError((e) -> {
-            log.error("SSE连接异常，准备移除连接 userId: {} channel: {}", userId, channel, e);
-            removeEmitter(userId, channel);
-        });
+        emitter.onCompletion(() -> removeChannelEmitter(channelKey, emitter));
+        emitter.onTimeout(() -> removeChannelEmitter(channelKey, emitter));
+        emitter.onError(e -> removeChannelEmitter(channelKey, emitter));
 
         try {
             emitter.send(SseEmitter.event().comment("connected"));
         } catch (IOException e) {
-            removeEmitter(userId, channel);
+            SESSION_EMITTERS.remove(channelKey, emitter);
         }
         return emitter;
     }
 
     /**
-     * 断开指定用户的 SSE 连接
-     *
-     * @param userId 用户的唯一标识符，用于区分不同用户的连接
-     * @param token  用户的唯一令牌，用于识别具体的连接
+     * 断开指定 channelKey 的 SSE 连接。
+     */
+    public void disconnect(String channelKey) {
+        if (channelKey == null) {
+            return;
+        }
+        SseEmitter emitter = SESSION_EMITTERS.remove(channelKey);
+        if (emitter != null) {
+            try {
+                emitter.send(SseEmitter.event().comment("disconnected"));
+            } catch (Exception exception) {
+                log.error("SSE disconnect 失败 channelKey: {}", channelKey, exception);
+            } finally {
+                safeComplete(emitter);
+            }
+        }
+    }
+
+    /**
+     * 向指定 channelKey 发送结构化事件（仅本机）。
+     */
+    public void sendEvent(String channelKey, SseEventDto eventDto) {
+        if (!sendLocalEvent(channelKey, eventDto)) {
+            log.warn("【SSE发送失败】channelKey: {} 没有活跃连接, 当前连接数: {}",
+                channelKey, SESSION_EMITTERS.size());
+        }
+    }
+
+    /**
+     * 仅本机投递。
+     * 返回 true 表示本机存在该 channelKey 的连接并已处理。
+     * done=true 的事件发送成功后立即移除并关闭连接。
+     */
+    public boolean sendLocalEvent(String channelKey, SseEventDto eventDto) {
+        if (channelKey == null || eventDto == null) {
+            return false;
+        }
+
+        SseEmitter emitter = SESSION_EMITTERS.get(channelKey);
+        if (emitter == null) {
+            return false;
+        }
+
+        try {
+            synchronized (emitter) {
+                if (SESSION_EMITTERS.get(channelKey) != emitter) {
+                    return false;
+                }
+
+                emitter.send(SseEmitter.event()
+                    .name(eventDto.getEvent())
+                    .data(JSONUtil.toJsonStr(eventDto)));
+
+                if (Boolean.TRUE.equals(eventDto.getDone())) {
+                    removeChannelEmitter(channelKey, emitter);
+                }
+            }
+        } catch (Exception e) {
+            log.error("【SSE发送失败】channelKey: {}, event: {}",
+                channelKey, eventDto.getEvent(), e);
+            removeChannelEmitter(channelKey, emitter);
+        }
+        return true;
+    }
+
+    /**
+     * 向 channelKey 发送纯文本消息（仅本机）。
+     */
+    public void sendMessage(String channelKey, String message) {
+        sendEvent(channelKey, SseEventDto.content(message));
+    }
+
+    private void removeChannelEmitter(String channelKey, SseEmitter emitter) {
+        if (SESSION_EMITTERS.remove(channelKey, emitter)) {
+            safeComplete(emitter);
+        }
+    }
+
+    // ======================== 用户维度 ========================
+
+    /**
+     * 建立用户级 SSE 连接。
+     */
+    public SseEmitter connect(Long userId, String token) {
+        Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.computeIfAbsent(
+            userId, k -> new ConcurrentHashMap<>()
+        );
+
+        SseEmitter oldEmitter = emitters.remove(token);
+        if (oldEmitter != null) {
+            safeComplete(oldEmitter);
+        }
+
+        SseEmitter emitter = new SseEmitter(86400000L);
+        emitters.put(token, emitter);
+
+        emitter.onCompletion(() -> removeUserEmitter(userId, token));
+        emitter.onTimeout(() -> removeUserEmitter(userId, token));
+        emitter.onError(e -> {
+            log.error("SSE连接异常 userId: {} token: {}", userId, token, e);
+            removeUserEmitter(userId, token);
+        });
+
+        try {
+            emitter.send(SseEmitter.event().comment("connected"));
+        } catch (IOException e) {
+            removeUserEmitter(userId, token);
+        }
+        return emitter;
+    }
+
+    /**
+     * 断开用户级 SSE 连接。
      */
     public void disconnect(Long userId, String token) {
-        disconnectByChannel(userId, token);
-    }
-
-    /**
-     * 断开指定用户会话的 SSE 连接
-     */
-    public void disconnectSession(Long userId, Long sessionId) {
-        if (userId == null || sessionId == null) {
+        if (userId == null || token == null) {
             return;
         }
-        disconnectByChannel(userId, sessionChannel(sessionId));
-    }
 
-    /**
-     * 根据管道名称进行关闭连接
-     * @param userId 用户的唯一标识符，用于区分不同用户的连接
-     * @param channel 管道标识（topic）
-     */
-    private void disconnectByChannel(Long userId, String channel) {
-        if (userId == null || channel == null) {
-            return;
-        }
-        Map<String, SseEmitter> emitters = USER_CHANNEL_EMITTERS.get(userId);
+        Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.get(userId);
         if (MapUtil.isNotEmpty(emitters)) {
-            SseEmitter sseEmitter = emitters.get(channel);
-            if (sseEmitter != null) {
+            SseEmitter emitter = emitters.remove(token);
+            if (emitter != null) {
                 try {
-                    sseEmitter.send(SseEmitter.event().comment("disconnected"));
-                } catch (Exception exception) {
-                    log.error("SSE disconnect send error userId: {} channel: {}",
-                        userId, channel, exception.getMessage(), exception);
+                    emitter.send(SseEmitter.event().comment("disconnected"));
+                } catch (Exception e) {
+                    log.error("SSE disconnect 失败 userId: {} token: {}", userId, token, e);
                 } finally {
-                    removeEmitter(userId, channel);
-                    safeComplete(sseEmitter);
+                    safeComplete(emitter);
                 }
-            } else {
-                removeEmitter(userId, channel);
             }
-        } else {
-            USER_CHANNEL_EMITTERS.remove(userId);
+            if (emitters.isEmpty()) {
+                USER_TOKEN_EMITTERS.remove(userId);
+            }
+        }
+    }
+
+    private void removeUserEmitter(Long userId, String token) {
+        Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.get(userId);
+        if (MapUtil.isEmpty(emitters)) {
+            USER_TOKEN_EMITTERS.remove(userId);
+            return;
+        }
+
+        SseEmitter emitter = emitters.remove(token);
+        if (emitter != null) {
+            safeComplete(emitter);
+        }
+        if (emitters.isEmpty()) {
+            USER_TOKEN_EMITTERS.remove(userId);
         }
     }
 
     /**
-     * SSE 心跳检测，关闭无效连接
+     * SSE 心跳检测，清理无效连接。
      */
     public void sseMonitor() {
         final SseEmitter.SseEventBuilder heartbeat = SseEmitter.event().comment("heartbeat");
-        // 记录需要移除的用户ID
-        List<Long> toRemoveUsers = new ArrayList<>();
 
-        USER_CHANNEL_EMITTERS.forEach((userId, emitterMap) -> {
+        List<Long> toRemoveUsers = new ArrayList<>();
+        USER_TOKEN_EMITTERS.forEach((userId, emitterMap) -> {
             if (CollUtil.isEmpty(emitterMap)) {
                 toRemoveUsers.add(userId);
                 return;
@@ -185,231 +268,169 @@ public class SseEmitterManager {
                     entry.getValue().send(heartbeat);
                     return false;
                 } catch (Exception ex) {
-                    try {
-                        entry.getValue().complete();
-                    } catch (Exception ignore) {
-                        // 忽略重复关闭异常
-                    }
-                    return true; // 发送失败 → 移除该连接
+                    safeComplete(entry.getValue());
+                    return true;
                 }
             });
 
-            // 移除空连接用户
             if (emitterMap.isEmpty()) {
                 toRemoveUsers.add(userId);
             }
         });
+        toRemoveUsers.forEach(USER_TOKEN_EMITTERS::remove);
 
-        // 循环结束后统一清理空用户，避免并发修改异常
-        toRemoveUsers.forEach(USER_CHANNEL_EMITTERS::remove);
+        SESSION_EMITTERS.entrySet().removeIf(entry -> {
+            try {
+                entry.getValue().send(heartbeat);
+                return false;
+            } catch (Exception ex) {
+                safeComplete(entry.getValue());
+                return true;
+            }
+        });
     }
 
     /**
-     * 订阅SSE消息主题，并提供一个消费者函数来处理接收到的消息
-     *
-     * @param consumer 处理SSE消息的消费者函数
+     * 订阅 SSE Redis 主题。
      */
     public void subscribeMessage(Consumer<SseMessageDto> consumer) {
         RedisUtils.subscribe(SSE_TOPIC, SseMessageDto.class, consumer);
     }
 
     /**
-     * 向指定的用户会话发送消息
-     *
-     * @param userId  要发送消息的用户id
-     * @param message 要发送的消息内容
+     * 向指定用户的所有连接发送消息。
      */
     public void sendMessage(Long userId, String message) {
-        Map<String, SseEmitter> emitters = USER_CHANNEL_EMITTERS.get(userId);
+        Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.get(userId);
         if (MapUtil.isNotEmpty(emitters)) {
             for (Map.Entry<String, SseEmitter> entry : emitters.entrySet()) {
                 try {
-                    // 格式化为标准SSE JSON格式
                     SseEventDto eventDto = SseEventDto.content(message);
                     entry.getValue().send(SseEmitter.event()
                         .name("message")
                         .data(JSONUtil.toJsonStr(eventDto)));
                 } catch (Exception e) {
                     SseEmitter remove = emitters.remove(entry.getKey());
-                    if (remove != null) {
-                        remove.complete();
-                    }
+                    safeComplete(remove);
                 }
             }
+            if (emitters.isEmpty()) {
+                USER_TOKEN_EMITTERS.remove(userId);
+            }
         } else {
-            USER_CHANNEL_EMITTERS.remove(userId);
+            USER_TOKEN_EMITTERS.remove(userId);
         }
     }
 
     /**
-     * 向指定用户的指定会话发送消息（仅该会话可见）
-     */
-    public void sendMessage(Long userId, Long sessionId, String message) {
-        if (userId == null || sessionId == null) {
-            return;
-        }
-        sendMessageToChannel(userId, sessionChannel(sessionId), message);
-    }
-
-    /**
-     * 向通道发送消息
-     * @param userId 要发送消息的用户id
-     * @param channel 通道名
-     * @param message 要发送的消息内容
-     */
-    private void sendMessageToChannel(Long userId, String channel, String message) {
-        Map<String, SseEmitter> emitters = USER_CHANNEL_EMITTERS.get(userId);
-        SseEmitter emitter = emitters == null ? null : emitters.get(channel);
-        if (emitter == null) {
-            return;
-        }
-        try {
-            SseEventDto eventDto = SseEventDto.content(message);
-            emitter.send(SseEmitter.event()
-                .name("message")
-                .data(JSONUtil.toJsonStr(eventDto)));
-        } catch (Exception e) {
-            removeEmitter(userId, channel);
-            safeComplete(emitter);
-        }
-    }
-
-
-    /**
-     * 向指定的用户会话发送结构化事件
-     *
-     * @param userId    要发送消息的用户id
-     * @param eventDto  SSE事件对象
+     * 向指定用户的所有连接发送结构化事件。
      */
     public void sendEvent(Long userId, SseEventDto eventDto) {
-        Map<String, SseEmitter> emitters = USER_CHANNEL_EMITTERS.get(userId);
+        Map<String, SseEmitter> emitters = USER_TOKEN_EMITTERS.get(userId);
         if (MapUtil.isNotEmpty(emitters)) {
-            log.debug("【SSE发送】userId: {}, emitter数量: {}, event: {}", userId, emitters.size(), eventDto.getEvent());
             for (Map.Entry<String, SseEmitter> entry : emitters.entrySet()) {
                 try {
                     entry.getValue().send(SseEmitter.event()
                         .name(eventDto.getEvent())
                         .data(JSONUtil.toJsonStr(eventDto)));
                 } catch (Exception e) {
-                    log.error("【SSE发送失败】userId: {}, token: {}, error: {}", userId, entry.getKey(), e.getMessage());
+                    log.error("【SSE发送失败】userId: {}, token: {}", userId, entry.getKey(), e);
                     SseEmitter remove = emitters.remove(entry.getKey());
-                    if (remove != null) {
-                        safeComplete(remove);
-                    }
+                    safeComplete(remove);
                 }
             }
+            if (emitters.isEmpty()) {
+                USER_TOKEN_EMITTERS.remove(userId);
+            }
         } else {
-            log.warn("【SSE发送失败】userId: {} 没有活跃的SSE连接, 当前连接用户: {}", userId, USER_CHANNEL_EMITTERS.keySet());
-            USER_CHANNEL_EMITTERS.remove(userId);
+            log.warn("【SSE发送失败】userId: {} 没有活跃的SSE连接, 当前连接用户: {}",
+                userId, USER_TOKEN_EMITTERS.keySet());
+            USER_TOKEN_EMITTERS.remove(userId);
         }
     }
 
+    // ======================== 兼容旧调用 ========================
+
     /**
-     * 向指定用户的指定会话发送结构化事件（仅该会话可见）
+     * @deprecated 会话已改为 channelKey 注册，请使用 {@link #connect(String)}
      */
-    public void sendEvent(Long userId, Long sessionId, SseEventDto eventDto) {
+    @Deprecated
+    public SseEmitter connectSession(Long userId, Long sessionId) {
+        if (userId == null || sessionId == null) {
+            return null;
+        }
+        return connect(String.valueOf(sessionId));
+    }
+
+    @Deprecated
+    public void disconnectSession(Long userId, Long sessionId) {
         if (userId == null || sessionId == null) {
             return;
         }
-        sendEventToChannel(userId, sessionChannel(sessionId), eventDto);
+        disconnect(String.valueOf(sessionId));
+    }
+
+    public void sendMessage(Long userId, Long sessionId, String message) {
+        if (sessionId == null) {
+            sendMessage(userId, message);
+            return;
+        }
+        sendMessage(String.valueOf(sessionId), message);
+    }
+
+    public void sendEvent(Long userId, Long sessionId, SseEventDto eventDto) {
+        if (sessionId == null) {
+            sendEvent(userId, eventDto);
+            return;
+        }
+        sendEvent(String.valueOf(sessionId), eventDto);
     }
 
     /**
-     * 向指定的通道发送结构化事件
-     * @param userId 要发送消息的用户id
-     * @param channel 通道
-     * @param eventDto SSE事件对象
-     */
-    private void sendEventToChannel(Long userId, String channel, SseEventDto eventDto) {
-        Map<String, SseEmitter> emitters = USER_CHANNEL_EMITTERS.get(userId);
-        SseEmitter emitter = emitters == null ? null : emitters.get(channel);
-        if (emitter == null) {
-            log.warn("【SSE发送失败】userId: {} channel: {} 没有活跃的SSE连接", userId, channel);
-            return;
-        }
-        try {
-            emitter.send(SseEmitter.event()
-                .name(eventDto.getEvent())
-                .data(JSONUtil.toJsonStr(eventDto)));
-        } catch (Exception e) {
-            log.error("【SSE发送失败】userId: {}, channel: {}, error: {}",
-                userId, channel, e.getMessage());
-            removeEmitter(userId, channel);
-            safeComplete(emitter);
-        }
-    }
-
-    /**
-     * 将用户指定的会话通道关闭
-     * @param userId 要关闭的用户id
-     * @param channel 通道名称
-     */
-    private void removeEmitter(Long userId, String channel) {
-        if (userId == null || channel == null) {
-            return;
-        }
-        Map<String, SseEmitter> emitters = USER_CHANNEL_EMITTERS.get(userId);
-        if (MapUtil.isNotEmpty(emitters)) {
-            emitters.remove(channel);
-            if (emitters.isEmpty()) {
-                USER_CHANNEL_EMITTERS.remove(userId);
-            }
-        }
-    }
-
-    private void safeComplete(SseEmitter emitter) {
-        if (emitter == null) {
-            return;
-        }
-        try {
-            emitter.complete();
-        } catch (Exception ignore) {
-            // ignore already closed or unusable response
-        }
-    }
-
-    /**
-     * 本机全用户会话发送消息
-     *
-     * @param message 要发送的消息内容
+     * 本机全用户发送消息。
      */
     public void sendMessage(String message) {
-        for (Long userId : USER_CHANNEL_EMITTERS.keySet()) {
+        for (Long userId : USER_TOKEN_EMITTERS.keySet()) {
             sendMessage(userId, message);
         }
     }
 
     /**
-     * 发布SSE订阅消息
-     *
-     * @param sseMessageDto 要发布的SSE消息对象
+     * 发布 SSE 订阅消息。
      */
     public void publishMessage(SseMessageDto sseMessageDto) {
         SseMessageDto broadcastMessage = new SseMessageDto();
         broadcastMessage.setMessage(sseMessageDto.getMessage());
         broadcastMessage.setUserIds(sseMessageDto.getUserIds());
+        broadcastMessage.setSessionId(sseMessageDto.getSessionId());
+        broadcastMessage.setChannelKey(sseMessageDto.getChannelKey());
+        broadcastMessage.setEventDto(sseMessageDto.getEventDto());
+
         RedisUtils.publish(SSE_TOPIC, broadcastMessage, consumer -> {
-            log.info("SSE发送主题订阅消息topic:{} session keys:{} message:{}",
-                SSE_TOPIC, sseMessageDto.getUserIds(), sseMessageDto.getMessage());
+            log.info("SSE发送主题订阅消息 topic:{} channelKey:{} sessionId:{} userIds:{} event:{}",
+                SSE_TOPIC,
+                sseMessageDto.getChannelKey(),
+                sseMessageDto.getSessionId(),
+                sseMessageDto.getUserIds(),
+                sseMessageDto.getEventDto() == null
+                    ? null
+                    : sseMessageDto.getEventDto().getEvent());
         });
     }
 
     /**
-     * 向所有的用户发布订阅的消息(群发)
-     *
-     * @param message 要发布的消息内容
+     * 向所有用户发布消息（群发）。
      */
     public void publishAll(String message) {
         SseMessageDto broadcastMessage = new SseMessageDto();
         broadcastMessage.setMessage(message);
         RedisUtils.publish(SSE_TOPIC, broadcastMessage, consumer -> {
-            log.info("SSE发送主题订阅消息topic:{} message:{}", SSE_TOPIC, message);
+            log.info("SSE发送主题订阅消息 topic:{} message:{}", SSE_TOPIC, message);
         });
     }
 
-
     /**
-     * 向指定的 SseEmitter 发送结构化事件（不经过 USER_TOKEN_EMITTERS）。
+     * 向请求级 SseEmitter 发送结构化事件。
      */
     public void sendEvent(SseEmitter emitter, SseEventDto eventDto) {
         if (emitter == null) {
@@ -425,10 +446,18 @@ public class SseEmitterManager {
         }
     }
 
-    /**
-     * 完成指定的 SseEmitter（不经过 USER_TOKEN_EMITTERS）。
-     */
     public void complete(SseEmitter emitter) {
         safeComplete(emitter);
+    }
+
+    private void safeComplete(SseEmitter emitter) {
+        if (emitter == null) {
+            return;
+        }
+        try {
+            emitter.complete();
+        } catch (Exception ignore) {
+            // ignore already closed or unusable response
+        }
     }
 }
